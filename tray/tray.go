@@ -168,8 +168,9 @@ func (tm *TrayManager) handlePlay() {
 		return
 	}
 
-	if tm.isPlaying {
+	if tm.player.IsRunning() {
 		tm.player.Resume()
+		tm.isPlaying = true
 	} else {
 		if err := tm.player.Play(lastStream); err != nil {
 			logger.LogError("Play: failed to start playback", err)
@@ -333,11 +334,9 @@ func (tm *TrayManager) refreshStreamsMenu() {
 
 // handleStreamSelected handles selection of a stream from the menu.
 func (tm *TrayManager) handleStreamSelected(streamURL string) {
-	// Stop current playback if running
-	if tm.isPlaying {
-		tm.player.Stop()
-		tm.supervisor.Stop()
-	}
+	// Stop current playback first
+	tm.player.Stop()
+	tm.supervisor.Stop()
 
 	// Save the selected stream and start playing
 	tm.cfg.SetLastStream(streamURL)

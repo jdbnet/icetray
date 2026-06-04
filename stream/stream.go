@@ -337,10 +337,11 @@ func (s *Supervisor) attemptConnection(url string) error {
 	logger.Log("Attempting to connect to stream: " + url)
 	err := reader.Start()
 
-	s.player.ClearSource()
-
 	s.mu.Lock()
-	s.reader = nil
+	if s.reader == reader {
+		s.player.ClearSource()
+		s.reader = nil
+	}
 	s.mu.Unlock()
 
 	return err
