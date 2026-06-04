@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=IceTray
+Comment=Internet Radio Player
+Exec=icetray
+Icon=icetray
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupNotify=false
