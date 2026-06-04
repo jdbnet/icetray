@@ -27,7 +27,7 @@ jobs:
           go install github.com/tc-hib/go-winres@latest
           export PATH="$PATH:$(go env GOPATH)/bin"
           go-winres make
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o icetray-windows.exe .
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags "-H=windowsgui" -o icetray-windows.exe .
 
       - name: Create release artifacts
         run: mkdir -p dist && mv icetray-linux icetray-windows.exe dist/

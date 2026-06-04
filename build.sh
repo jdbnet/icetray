@@ -23,7 +23,7 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 go-winres make
 
 echo "==> Building Windows binary (amd64)..."
-GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o build/icetray-windows-amd64.exe .
+GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags "-H=windowsgui" -o build/icetray-windows-amd64.exe .
 echo "    Done: build/icetray-windows-amd64.exe"
 
 # Clean up the generated .syso resource files so they don't pollute the repository

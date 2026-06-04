@@ -2,6 +2,7 @@ package tray
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/getlantern/systray"
 	"github.com/ncruces/zenity"
@@ -56,7 +57,11 @@ func (tm *TrayManager) Init() {
 
 // onReady is called when the system tray is ready.
 func (tm *TrayManager) onReady() {
-	systray.SetTemplateIcon(assets.Icon, assets.Icon)
+	if runtime.GOOS == "windows" {
+		systray.SetIcon(assets.IconICO)
+	} else {
+		systray.SetTemplateIcon(assets.Icon, assets.Icon)
+	}
 	systray.SetTitle("IceTray")
 	systray.SetTooltip("IceTray - Internet Radio Player")
 
