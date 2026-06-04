@@ -1,0 +1,39 @@
+name: Build and Upload Binaries
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-upload:
+    runs-on: build-htz-01
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o icetray-linux main.go
+          GOOS=windows GOARCH=amd64 go build -o icetray-windows.exe main.go
+
+      - name: Create release artifacts
+        run: mkdir -p dist && mv icetray-linux icetray-windows.exe dist/
+
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 cp dist/icetray-linux s3://apps/icetray/icetray-linux --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
+          aws s3 cp dist/icetray-windows.exe s3://apps/icetray/icetray-windows.exe --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
+
+      - name: Clean up
+        run: rm -rf dist icetray-linux icetray-windows.exe
