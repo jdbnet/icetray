@@ -37,8 +37,8 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 -v ${{ github.workspace }}:/workspace -w /workspace golang:1.25-bookworm bash -c "
             apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev
-            go build -o icetray-linux-arm64 .
-            go build -tags headless -o icetray-headless-linux-arm64 .
+            go build -buildvcs=false -o icetray-linux-arm64 .
+            go build -buildvcs=false -tags headless -o icetray-headless-linux-arm64 .
           "
 
       - name: Create release artifacts
