@@ -1,12 +1,15 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 
 	"git.jdbnet.co.uk/jamie/icetray/assets"
 	"git.jdbnet.co.uk/jamie/icetray/config"
@@ -18,6 +21,10 @@ import (
 )
 
 func main() {
+	// Parse command line flags
+	streamURL := flag.String("stream", "", "Stream URL to play directly in terminal mode")
+	flag.Parse()
+
 	// Get or create config directory
 	configDir, err := getConfigDir()
 	if err != nil {
@@ -31,6 +38,37 @@ func main() {
 		os.Exit(1)
 	}
 	defer logger.Close()
+
+	// Terminal direct play mode
+	if *streamURL != "" {
+		logger.Log("Running in terminal mode, playing stream: " + *streamURL)
+		
+		player := player.NewPlayer()
+		defer player.Close()
+
+		cfg, err := config.LoadConfig(configDir)
+		if err == nil {
+			player.SetVolume(cfg.GetVolume())
+		} else {
+			player.SetVolume(100)
+		}
+
+		supervisor := stream.NewSupervisor(player)
+		defer supervisor.Stop()
+
+		if err := player.Play(*streamURL); err != nil {
+			logger.LogFatal("Failed to start stream", err)
+		}
+		supervisor.Start(*streamURL)
+
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		
+		fmt.Printf("Playing stream: %s\nPress Ctrl+C to stop...\n", *streamURL)
+		<-sigChan
+		fmt.Println("\nStopping playback...")
+		return
+	}
 
 	// If running on Linux, check and install if running from non-target path
 	checkAndInstallLinux()

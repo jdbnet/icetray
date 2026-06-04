@@ -25,6 +25,16 @@ Get the latest build of IceTray for your operating system:
 2. **Auto-Install**: Upon running the executable from a temporary directory (like your Downloads folder), it will automatically copy itself to a user-local directory (without requiring Administrator privileges), register a Start Menu/Main Menu shortcut, and launch itself in the system tray.
 3. **Controls**: Look for the music icon in your system tray to select radio streams, add new streams, change volume, or play/pause/stop your music.
 
+### Terminal-Only Mode (Headless / Headed Linux & Windows)
+
+For headless or terminal-only environments (where X11/Wayland/systray is unavailable), you can play a stream directly from your terminal using the `--stream` flag:
+
+```bash
+./icetray-linux --stream https://icecast.jdb143.uk/music
+```
+
+This bypasses the self-installation process and the system tray UI, playing the audio stream directly to your default output device and exiting cleanly upon receiving an interrupt signal (Ctrl+C).
+
 ---
 
 ## Developer Section
