@@ -8,6 +8,10 @@ echo "==> Building Linux binary (amd64)..."
 GOOS=linux GOARCH=amd64 go build -o build/icetray-linux-amd64 .
 echo "    Done: build/icetray-linux-amd64"
 
+echo "==> Building Linux headless binary (amd64)..."
+GOOS=linux GOARCH=amd64 go build -tags headless -o build/icetray-headless-linux-amd64 .
+echo "    Done: build/icetray-headless-linux-amd64"
+
 echo ""
 echo "==> Preparing Windows resources..."
 # Check if go-winres is installed, install if not

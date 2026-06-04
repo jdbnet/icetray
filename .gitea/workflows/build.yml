@@ -24,13 +24,14 @@ jobs:
       - name: Build binaries
         run: |
           GOOS=linux GOARCH=amd64 go build -o icetray-linux .
+          GOOS=linux GOARCH=amd64 go build -tags headless -o icetray-headless-linux .
           go install github.com/tc-hib/go-winres@latest
           export PATH="$PATH:$(go env GOPATH)/bin"
           go-winres make
           GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags "-H=windowsgui" -o icetray-windows.exe .
 
       - name: Create release artifacts
-        run: mkdir -p dist && mv icetray-linux icetray-windows.exe dist/
+        run: mkdir -p dist && mv icetray-linux icetray-headless-linux icetray-windows.exe dist/
 
       - name: Upload to Cloudflare R2
         env:
@@ -39,7 +40,8 @@ jobs:
           AWS_DEFAULT_REGION: auto
         run: |
           aws s3 cp dist/icetray-linux s3://apps/icetray/icetray-linux --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
+          aws s3 cp dist/icetray-headless-linux s3://apps/icetray/icetray-headless-linux --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
           aws s3 cp dist/icetray-windows.exe s3://apps/icetray/icetray-windows.exe --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
 
       - name: Clean up
-        run: rm -rf dist icetray-linux icetray-windows.exe
+        run: rm -rf dist icetray-linux icetray-headless-linux icetray-windows.exe

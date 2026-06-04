@@ -18,6 +18,7 @@ Get the latest build of IceTray for your operating system:
 
 - 📥 [**Download for Windows**](https://apps.jdbnet.co.uk/icetray/icetray-windows.exe)
 - 📥 [**Download for Linux**](https://apps.jdbnet.co.uk/icetray/icetray-linux)
+- 📥 [**Download for Linux (Headless / Terminal-only)**](https://apps.jdbnet.co.uk/icetray/icetray-headless-linux)
 
 ## How It Works
 
@@ -27,13 +28,24 @@ Get the latest build of IceTray for your operating system:
 
 ### Terminal-Only Mode (Headless / Headed Linux & Windows)
 
-For headless or terminal-only environments (where X11/Wayland/systray is unavailable), you can play a stream directly from your terminal using the `--stream` flag:
+For headless or terminal-only environments (where X11/Wayland/systray is unavailable), we recommend using the **Headless Linux** binary, which is compiled without any GTK or AppIndicator GUI dependencies:
 
 ```bash
-./icetray-linux --stream https://icecast.jdb143.uk/music
+./icetray-headless-linux --stream https://icecast.jdb143.uk/music
 ```
 
-This bypasses the self-installation process and the system tray UI, playing the audio stream directly to your default output device and exiting cleanly upon receiving an interrupt signal (Ctrl+C).
+This bypasses the self-installation process and the system tray UI, playing the audio stream directly to your default output device (e.g. ALSA) and exiting cleanly upon receiving an interrupt signal (Ctrl+C).
+
+#### Headed Binary on Minimal Linux Installations
+
+If you are instead running the standard headed `icetray-linux` binary on a minimal, server, or terminal-only Linux installation, the dynamic linker will require the desktop UI shared libraries. You can resolve this by installing the required runtime libraries:
+
+```bash
+sudo apt update
+sudo apt install libayatana-appindicator3-1 libgtk-3-0 libasound2
+```
+
+The headless binary (`icetray-headless-linux`) does NOT require GTK or Ayatana AppIndicator packages, only the ALSA library (`libasound2`).
 
 ---
 

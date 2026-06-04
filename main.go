@@ -17,7 +17,6 @@ import (
 	"git.jdbnet.co.uk/jamie/icetray/player"
 	"git.jdbnet.co.uk/jamie/icetray/startup"
 	"git.jdbnet.co.uk/jamie/icetray/stream"
-	"git.jdbnet.co.uk/jamie/icetray/tray"
 )
 
 func main() {
@@ -116,10 +115,8 @@ func main() {
 		}
 	}
 
-	// Initialize and run system tray
-	logger.Log("Initializing system tray")
-	trayMgr := tray.NewTrayManager(cfg, player, supervisor, startupMgr)
-	trayMgr.Init() // This is a blocking call
+	// Initialize and run system tray (or block if headless)
+	runHeaded(cfg, player, supervisor, startupMgr)
 
 	logger.Log("IceTray shutting down")
 }
