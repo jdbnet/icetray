@@ -16,9 +16,12 @@ IceTray is a lightweight, system tray-based internet radio player that streams y
 
 Get the latest build of IceTray for your operating system:
 
-- 📥 [**Download for Windows**](https://apps.jdbnet.co.uk/icetray/icetray-windows.exe)
-- 📥 [**Download for Linux**](https://apps.jdbnet.co.uk/icetray/icetray-linux)
-- 📥 [**Download for Linux (Headless / Terminal-only)**](https://apps.jdbnet.co.uk/icetray/icetray-headless-linux)
+- 📥 [**Download for Windows (x64)**](https://apps.jdbnet.co.uk/icetray/icetray-windows.exe)
+- 📥 [**Download for Linux (x64)**](https://apps.jdbnet.co.uk/icetray/icetray-linux)
+- 📥 [**Download for Linux (x64 Headless / Terminal-only)**](https://apps.jdbnet.co.uk/icetray/icetray-headless-linux)
+- 📥 [**Download for Linux (ARM64 / Raspberry Pi)**](https://apps.jdbnet.co.uk/icetray/icetray-linux-arm64)
+- 📥 [**Download for Linux (ARM64 Headless / Terminal-only)**](https://apps.jdbnet.co.uk/icetray/icetray-headless-linux-arm64)
+
 
 ## How It Works
 
@@ -71,6 +74,18 @@ Install the Mingw-w64 cross-compiler:
 ```bash
 sudo apt-get install mingw-w64
 ```
+
+#### Linux ARM64 (Cross-compiling from Linux x86_64)
+1. Add the foreign architecture:
+   ```bash
+   sudo dpkg --add-architecture arm64
+   ```
+2. Install the cross-compiler and development packages:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install gcc-aarch64-linux-gnu libasound2-dev:arm64 libgtk-3-dev:arm64 libayatana-appindicator3-dev:arm64
+   ```
+   *(Note: On Debian/Ubuntu, installing `libayatana-appindicator3-dev:arm64` will conflict with and replace the native `libayatana-appindicator3-dev:amd64`. You can compile them sequentially or extract the packages locally to build both.)*
 
 ### Compiling
 
