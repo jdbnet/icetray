@@ -5,12 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/user/icetray/config"
-	"github.com/user/icetray/logger"
-	"github.com/user/icetray/player"
-	"github.com/user/icetray/startup"
-	"github.com/user/icetray/stream"
-	"github.com/user/icetray/tray"
+	"git.jdbnet.co.uk/jamie/icetray/config"
+	"git.jdbnet.co.uk/jamie/icetray/logger"
+	"git.jdbnet.co.uk/jamie/icetray/player"
+	"git.jdbnet.co.uk/jamie/icetray/startup"
+	"git.jdbnet.co.uk/jamie/icetray/stream"
+	"git.jdbnet.co.uk/jamie/icetray/tray"
 )
 
 func main() {

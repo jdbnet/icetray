@@ -6,12 +6,12 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/ncruces/zenity"
 
-	"github.com/user/icetray/assets"
-	"github.com/user/icetray/config"
-	"github.com/user/icetray/logger"
-	"github.com/user/icetray/player"
-	"github.com/user/icetray/startup"
-	"github.com/user/icetray/stream"
+	"git.jdbnet.co.uk/jamie/icetray/assets"
+	"git.jdbnet.co.uk/jamie/icetray/config"
+	"git.jdbnet.co.uk/jamie/icetray/logger"
+	"git.jdbnet.co.uk/jamie/icetray/player"
+	"git.jdbnet.co.uk/jamie/icetray/startup"
+	"git.jdbnet.co.uk/jamie/icetray/stream"
 )
 
 // TrayManager manages the system tray UI and events.
@@ -27,8 +27,8 @@ type TrayManager struct {
 	stopItem        *systray.MenuItem
 	streamsMenu     *systray.MenuItem
 	addStreamItem   *systray.MenuItem
-	volumeUpItem    *systray.MenuItem
-	volumeDownItem  *systray.MenuItem
+	volumeMenu      *systray.MenuItem
+	volumeItems     map[int]*systray.MenuItem
 	settingsItem    *systray.MenuItem
 	autoplayItem    *systray.MenuItem
 	launchLoginItem *systray.MenuItem
@@ -40,11 +40,12 @@ type TrayManager struct {
 // NewTrayManager creates a new tray manager.
 func NewTrayManager(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm startup.StartupManager) *TrayManager {
 	return &TrayManager{
-		cfg:        cfg,
-		player:     p,
-		supervisor: sup,
-		startupMgr: sm,
-		isPlaying:  false,
+		cfg:         cfg,
+		player:      p,
+		supervisor:  sup,
+		startupMgr:  sm,
+		isPlaying:   false,
+		volumeItems: make(map[int]*systray.MenuItem),
 	}
 }
 
@@ -82,8 +83,8 @@ func (tm *TrayManager) onReady() {
 	systray.AddSeparator()
 
 	// Volume controls
-	tm.volumeUpItem = systray.AddMenuItem("🔊 Volume Up", "Increase volume")
-	tm.volumeDownItem = systray.AddMenuItem("🔉 Volume Down", "Decrease volume")
+	tm.volumeMenu = systray.AddMenuItem("🔊 Volume", "Set player volume")
+	tm.initVolumeMenu()
 
 	systray.AddSeparator()
 
@@ -134,12 +135,6 @@ func (tm *TrayManager) eventLoop() {
 
 		case <-tm.addStreamItem.ClickedCh:
 			tm.handleAddStream()
-
-		case <-tm.volumeUpItem.ClickedCh:
-			tm.handleVolumeUp()
-
-		case <-tm.volumeDownItem.ClickedCh:
-			tm.handleVolumeDown()
 
 		case <-tm.autoplayItem.ClickedCh:
 			tm.handleToggleAutoplay()
@@ -235,26 +230,41 @@ func (tm *TrayManager) handleAddStream() {
 	logger.Log(fmt.Sprintf("Added new stream: %s (%s)", name, url))
 }
 
-// handleVolumeUp increases the volume.
-func (tm *TrayManager) handleVolumeUp() {
+// initVolumeMenu populates the volume submenu with presets.
+func (tm *TrayManager) initVolumeMenu() {
+	presets := []int{100, 75, 50, 25, 0}
 	currentVol := tm.cfg.GetVolume()
-	newVol := currentVol + 5
-	if newVol > 100 {
-		newVol = 100
+
+	for _, vol := range presets {
+		label := fmt.Sprintf("%d%%", vol)
+		if vol == 0 {
+			label = "Mute (0%)"
+		}
+		
+		item := tm.volumeMenu.AddSubMenuItemCheckbox(label, "", vol == currentVol)
+		tm.volumeItems[vol] = item
+
+		v := vol
+		go func(menuItem *systray.MenuItem, level int) {
+			for range menuItem.ClickedCh {
+				tm.handleVolumeChange(level)
+			}
+		}(item, v)
 	}
-	tm.cfg.SetVolume(newVol)
-	tm.player.SetVolume(newVol)
 }
 
-// handleVolumeDown decreases the volume.
-func (tm *TrayManager) handleVolumeDown() {
-	currentVol := tm.cfg.GetVolume()
-	newVol := currentVol - 5
-	if newVol < 0 {
-		newVol = 0
-	}
+// handleVolumeChange sets the new volume and updates the menu checkmarks.
+func (tm *TrayManager) handleVolumeChange(newVol int) {
 	tm.cfg.SetVolume(newVol)
 	tm.player.SetVolume(newVol)
+
+	for vol, item := range tm.volumeItems {
+		if vol == newVol {
+			item.Check()
+		} else {
+			item.Uncheck()
+		}
+	}
 }
 
 // handleToggleAutoplay toggles autoplay setting.
@@ -347,5 +357,3 @@ func (tm *TrayManager) updateMenuState() {
 		tm.stopItem.Hide()
 	}
 }
-
-

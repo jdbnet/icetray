@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/user/icetray/logger"
+	"git.jdbnet.co.uk/jamie/icetray/logger"
 )
 
 // Player manages the mpv subprocess and IPC communication.
