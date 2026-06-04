@@ -45,7 +45,7 @@ func NewTrayManager(cfg *config.Config, p *player.Player, sup *stream.Supervisor
 		player:      p,
 		supervisor:  sup,
 		startupMgr:  sm,
-		isPlaying:   false,
+		isPlaying:   p.IsRunning(),
 		volumeItems: make(map[int]*systray.MenuItem),
 	}
 }
@@ -113,6 +113,9 @@ func (tm *TrayManager) onReady() {
 
 	// Quit item
 	tm.quitItem = systray.AddMenuItem("❌ Quit", "Quit IceTray")
+
+	// Update initial menu state based on player running state
+	tm.updateMenuState()
 
 	// Start event loop
 	go tm.eventLoop()
