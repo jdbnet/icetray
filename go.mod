@@ -4,6 +4,8 @@ go 1.25.0
 
 require (
 	github.com/getlantern/systray v1.2.2
+	github.com/gopxl/beep v1.4.1
+	github.com/ncruces/zenity v0.10.14
 	golang.org/x/sys v0.45.0
 )
 
@@ -11,6 +13,8 @@ require (
 	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dchest/jsmin v0.0.0-20220218165748-59f39799265f // indirect
+	github.com/ebitengine/oto/v3 v3.1.0 // indirect
+	github.com/ebitengine/purego v0.7.1 // indirect
 	github.com/getlantern/context v0.0.0-20220418194847-3d5e7a086201 // indirect
 	github.com/getlantern/errors v1.0.4 // indirect
 	github.com/getlantern/golog v0.0.0-20230503153817-8e72de7e0a65 // indirect
@@ -20,9 +24,10 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
 	github.com/josephspurrier/goversioninfo v1.4.1 // indirect
-	github.com/ncruces/zenity v0.10.14 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/randall77/makefat v0.0.0-20210315173500-7ddd0e42c844 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect

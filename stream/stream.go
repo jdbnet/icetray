@@ -81,43 +81,43 @@ func (rb *RingBuffer) Write(data []byte) error {
 	return nil
 }
 
-// Read reads up to size bytes from the buffer, blocking if empty.
-func (rb *RingBuffer) Read(size int) ([]byte, error) {
+// Read reads bytes from the buffer, blocking if empty. It implements io.Reader.
+func (rb *RingBuffer) Read(p []byte) (n int, err error) {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 
-	// Wait until there's data
+	// Wait until there's data or the buffer is closed
 	for rb.isEmpty() && !rb.closed {
 		rb.notEmpty.Wait()
 	}
 
 	if rb.isEmpty() {
-		return nil, fmt.Errorf("buffer is empty and closed")
+		if rb.closed {
+			return 0, io.EOF
+		}
+		return 0, nil
 	}
 
 	// Calculate how much data is available
 	available := rb.availableData()
-	toRead := size
+	toRead := len(p)
 	if toRead > available {
 		toRead = available
 	}
 
 	// Copy data out, handling wrap-around
-	result := make([]byte, toRead)
 	if rb.readPos+toRead <= rb.size {
-		// Direct read without wrap
-		copy(result, rb.buffer[rb.readPos:])
+		copy(p[:toRead], rb.buffer[rb.readPos:])
 		rb.readPos += toRead
 	} else {
-		// Read wraps around
 		firstPart := rb.size - rb.readPos
-		copy(result, rb.buffer[rb.readPos:])
-		copy(result[firstPart:], rb.buffer[0:toRead-firstPart])
+		copy(p[:firstPart], rb.buffer[rb.readPos:])
+		copy(p[firstPart:toRead], rb.buffer[0:toRead-firstPart])
 		rb.readPos = toRead - firstPart
 	}
 
 	rb.notFull.Broadcast()
-	return result, nil
+	return toRead, nil
 }
 
 // Close closes the buffer and signals all waiters.
@@ -129,6 +129,20 @@ func (rb *RingBuffer) Close() error {
 	rb.notEmpty.Broadcast()
 	rb.notFull.Broadcast()
 	return nil
+}
+
+// AvailableData returns the number of bytes available to read.
+func (rb *RingBuffer) AvailableData() int {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	return rb.availableData()
+}
+
+// IsClosed returns whether the buffer is closed.
+func (rb *RingBuffer) IsClosed() bool {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	return rb.closed
 }
 
 // isFull checks if the buffer is full.
@@ -163,6 +177,7 @@ type StreamReader struct {
 	buffer    *RingBuffer
 	connected atomic.Bool
 	stopChan  chan struct{}
+	onConnect func()
 }
 
 // NewStreamReader creates a new stream reader.
@@ -188,6 +203,12 @@ func (sr *StreamReader) Start() error {
 
 	sr.connected.Store(true)
 	defer sr.connected.Store(false)
+
+	if sr.onConnect != nil {
+		sr.onConnect()
+	}
+
+	defer sr.buffer.Close()
 
 	// Read from the response body into the ring buffer
 	buf := make([]byte, 4096)
@@ -254,6 +275,9 @@ func NewSupervisor(p *player.Player) *Supervisor {
 func (s *Supervisor) Start(streamURL string) {
 	s.mu.Lock()
 	s.streamURL = streamURL
+	if !s.isRunning.Load() {
+		s.stopChan = make(chan struct{})
+	}
 	s.mu.Unlock()
 
 	if s.isRunning.Load() {
@@ -303,12 +327,17 @@ func (s *Supervisor) supervise() {
 // attemptConnection tries to connect and read from the stream.
 func (s *Supervisor) attemptConnection(url string) error {
 	reader := NewStreamReader(url, 1024*1024) // 1MB buffer
+	reader.onConnect = func() {
+		s.player.SetSource(reader.GetBuffer())
+	}
 	s.mu.Lock()
 	s.reader = reader
 	s.mu.Unlock()
 
 	logger.Log("Attempting to connect to stream: " + url)
 	err := reader.Start()
+
+	s.player.ClearSource()
 
 	s.mu.Lock()
 	s.reader = nil
