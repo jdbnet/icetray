@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getlantern/systray"
+	"github.com/ncruces/zenity"
 
 	"github.com/user/icetray/assets"
 	"github.com/user/icetray/config"
@@ -201,10 +202,37 @@ func (tm *TrayManager) handleStop() {
 
 // handleAddStream prompts the user to add a new stream.
 func (tm *TrayManager) handleAddStream() {
-	// TODO: Implement a simple dialog for adding streams
-	// For now, log a message (can be improved with a native dialog in the future)
-	logger.Log("Add Stream: feature requires OS-specific dialog (TODO)")
-	fmt.Println("Add Stream: Enter stream name and URL (TODO)")
+	name, err := zenity.Entry("Enter stream name (e.g., Lofi Radio):", zenity.Title("Add Stream (1/2)"))
+	if err != nil || name == "" {
+		if err != zenity.ErrCanceled {
+			logger.LogError("Failed to get stream name", err)
+		}
+		return
+	}
+
+	url, err := zenity.Entry("Enter stream URL:", zenity.Title("Add Stream (2/2)"))
+	if err != nil || url == "" {
+		if err != zenity.ErrCanceled {
+			logger.LogError("Failed to get stream URL", err)
+		}
+		return
+	}
+
+	if err := tm.cfg.AddStream(name, url); err != nil {
+		logger.LogError("Failed to save new stream", err)
+		zenity.Error("Failed to save the new stream.", zenity.Title("Error"))
+		return
+	}
+
+	// Add just the new stream to the menu dynamically
+	item := tm.streamsMenu.AddSubMenuItem(name, url)
+	go func(menuItem *systray.MenuItem, streamURL string) {
+		for range menuItem.ClickedCh {
+			tm.handleStreamSelected(streamURL)
+		}
+	}(item, url)
+
+	logger.Log(fmt.Sprintf("Added new stream: %s (%s)", name, url))
 }
 
 // handleVolumeUp increases the volume.
