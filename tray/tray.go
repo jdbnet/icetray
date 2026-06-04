@@ -237,7 +237,7 @@ func (tm *TrayManager) handleAddStream() {
 
 // initVolumeMenu populates the volume submenu with presets.
 func (tm *TrayManager) initVolumeMenu() {
-	presets := []int{100, 75, 50, 25, 0}
+	presets := []int{100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0}
 	currentVol := tm.cfg.GetVolume()
 
 	for _, vol := range presets {
