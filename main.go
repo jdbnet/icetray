@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 
+	"git.jdbnet.co.uk/jamie/icetray/assets"
 	"git.jdbnet.co.uk/jamie/icetray/config"
 	"git.jdbnet.co.uk/jamie/icetray/logger"
 	"git.jdbnet.co.uk/jamie/icetray/player"
@@ -27,6 +31,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer logger.Close()
+
+	// If running on Linux, check and install if running from non-target path
+	checkAndInstallLinux()
 
 	logger.Log("IceTray starting up")
 
@@ -89,4 +96,124 @@ func getConfigDir() (string, error) {
 	}
 
 	return configDir, nil
+}
+
+// checkAndInstallLinux checks if the application is running from the target local bin directory.
+// If not, it copies itself there, installs the desktop entry and icon, launches the installed binary, and exits.
+func checkAndInstallLinux() {
+	if runtime.GOOS != "linux" {
+		return
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	execPath, err = filepath.Abs(execPath)
+	if err != nil {
+		return
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+
+	targetDir := filepath.Join(homeDir, ".local", "bin")
+	targetPath := filepath.Join(targetDir, "icetray")
+
+	// If the current executable is already the installed one, do nothing
+	if execPath == targetPath {
+		return
+	}
+
+	logger.Log("Running from temporary location. Installing to " + targetPath)
+	fmt.Printf("Installing IceTray to %s...\n", targetPath)
+
+	// Create directories
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		logger.LogError("Failed to create bin directory", err)
+		return
+	}
+
+	iconDir := filepath.Join(homeDir, ".local", "share", "icons")
+	if err := os.MkdirAll(iconDir, 0755); err != nil {
+		logger.LogError("Failed to create icons directory", err)
+		return
+	}
+
+	appDir := filepath.Join(homeDir, ".local", "share", "applications")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		logger.LogError("Failed to create applications directory", err)
+		return
+	}
+
+	// Remove old binary if it exists to avoid "text file busy" error
+	os.Remove(targetPath)
+
+	// Copy binary
+	srcFile, err := os.Open(execPath)
+	if err != nil {
+		logger.LogError("Failed to open source binary", err)
+		return
+	}
+	defer srcFile.Close()
+
+	destFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		logger.LogError("Failed to open destination binary", err)
+		return
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, srcFile); err != nil {
+		logger.LogError("Failed to copy binary", err)
+		return
+	}
+	destFile.Close()
+
+	// Write icon
+	iconPath := filepath.Join(iconDir, "icetray.png")
+	if err := os.WriteFile(iconPath, assets.Icon, 0644); err != nil {
+		logger.LogError("Failed to write icon", err)
+		return
+	}
+
+	// Write desktop entry
+	desktopContent := fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=IceTray
+Comment=Internet Radio Player
+Exec=%s
+Icon=%s
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+`, targetPath, iconPath)
+
+	desktopPath := filepath.Join(appDir, "icetray.desktop")
+	if err := os.WriteFile(desktopPath, []byte(desktopContent), 0644); err != nil {
+		logger.LogError("Failed to write desktop entry", err)
+		return
+	}
+
+	// Run update-desktop-database if available
+	if path, err := exec.LookPath("update-desktop-database"); err == nil {
+		exec.Command(path, appDir).Run()
+	}
+
+	logger.Log("Installation successful. Launching target binary: " + targetPath)
+	fmt.Println("IceTray installed successfully! Launching...")
+
+	// Launch the newly installed binary
+	cmd := exec.Command(targetPath)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+	if err := cmd.Start(); err != nil {
+		logger.LogError("Failed to start installed binary", err)
+		return
+	}
+
+	// Exit the current process
+	os.Exit(0)
 }
