@@ -35,7 +35,7 @@ jobs:
 
       - name: Build arm64 binaries (via QEMU)
         run: |
-          docker run --rm --platform linux/arm64 -v ${{ github.workspace }}:/workspace -w /workspace golang:1.22-bookworm bash -c "
+          docker run --rm --platform linux/arm64 -v ${{ github.workspace }}:/workspace -w /workspace golang:1.25-bookworm bash -c "
             apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev
             go build -o icetray-linux-arm64 .
             go build -tags headless -o icetray-headless-linux-arm64 .
