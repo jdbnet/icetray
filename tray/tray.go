@@ -62,7 +62,7 @@ func (tm *TrayManager) onReady() {
 	} else {
 		systray.SetTemplateIcon(assets.Icon, assets.Icon)
 	}
-	systray.SetTitle("IceTray")
+	systray.SetTitle("")
 	systray.SetTooltip("IceTray - Internet Radio Player")
 
 	// Play item
