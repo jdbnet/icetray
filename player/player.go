@@ -102,9 +102,9 @@ func (p *Player) stopActiveStream() {
 		p.activeBuf.Close()
 		p.activeBuf = nil
 	}
+	speaker.Clear()
 	speaker.Lock()
 	if p.ctrl != nil {
-		p.ctrl.Paused = true
 		p.ctrl.Streamer = nil
 		p.ctrl = nil
 	}

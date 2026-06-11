@@ -278,6 +278,7 @@ func (s *Supervisor) Start(streamURL string) {
 	if !s.isRunning.Load() {
 		s.stopChan = make(chan struct{})
 	}
+	stopChan := s.stopChan
 	s.mu.Unlock()
 
 	if s.isRunning.Load() {
@@ -287,14 +288,14 @@ func (s *Supervisor) Start(streamURL string) {
 	s.isRunning.Store(true)
 	s.backoff = time.Second
 
-	go s.supervise()
+	go s.supervise(stopChan)
 }
 
 // supervise is the main supervision loop.
-func (s *Supervisor) supervise() {
+func (s *Supervisor) supervise(stopChan chan struct{}) {
 	for {
 		select {
-		case <-s.stopChan:
+		case <-stopChan:
 			return
 		default:
 		}
@@ -311,7 +312,7 @@ func (s *Supervisor) supervise() {
 
 		// Wait before reconnecting with exponential backoff
 		select {
-		case <-s.stopChan:
+		case <-stopChan:
 			return
 		case <-time.After(s.backoff):
 			// Increase backoff, capped at maxBackoff
