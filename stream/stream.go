@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -173,25 +174,35 @@ func (rb *RingBuffer) availableData() int {
 
 // StreamReader reads from an HTTP stream into a ring buffer.
 type StreamReader struct {
-	url       string
-	buffer    *RingBuffer
-	connected atomic.Bool
-	stopChan  chan struct{}
-	onConnect func()
+	url        string
+	buffer     *RingBuffer
+	connected  atomic.Bool
+	stopChan   chan struct{}
+	onConnect  func()
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 }
 
 // NewStreamReader creates a new stream reader.
 func NewStreamReader(url string, bufferSize int) *StreamReader {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &StreamReader{
-		url:      url,
-		buffer:   NewRingBuffer(bufferSize),
-		stopChan: make(chan struct{}),
+		url:        url,
+		buffer:     NewRingBuffer(bufferSize),
+		stopChan:   make(chan struct{}),
+		ctx:        ctx,
+		cancelFunc: cancel,
 	}
 }
 
 // Start begins reading from the stream.
 func (sr *StreamReader) Start() error {
-	resp, err := http.Get(sr.url)
+	req, err := http.NewRequestWithContext(sr.ctx, "GET", sr.url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to connect to stream: %w", err)
 	}
@@ -241,7 +252,15 @@ func (sr *StreamReader) IsConnected() bool {
 
 // Stop stops reading from the stream.
 func (sr *StreamReader) Stop() {
-	close(sr.stopChan)
+	if sr.cancelFunc != nil {
+		sr.cancelFunc()
+	}
+	select {
+	case <-sr.stopChan:
+		// already closed
+	default:
+		close(sr.stopChan)
+	}
 }
 
 // GetBuffer returns the underlying ring buffer.
@@ -275,17 +294,16 @@ func NewSupervisor(p *player.Player) *Supervisor {
 func (s *Supervisor) Start(streamURL string) {
 	s.mu.Lock()
 	s.streamURL = streamURL
-	if !s.isRunning.Load() {
+	if s.stopChan == nil {
 		s.stopChan = make(chan struct{})
 	}
 	stopChan := s.stopChan
 	s.mu.Unlock()
 
-	if s.isRunning.Load() {
+	if s.isRunning.Swap(true) {
 		return
 	}
 
-	s.isRunning.Store(true)
 	s.backoff = time.Second
 
 	go s.supervise(stopChan)
@@ -350,18 +368,21 @@ func (s *Supervisor) attemptConnection(url string) error {
 
 // Stop stops the supervisor and closes the stream.
 func (s *Supervisor) Stop() {
-	if !s.isRunning.Load() {
+	if !s.isRunning.Swap(false) {
 		return
 	}
 
-	s.isRunning.Store(false)
-	close(s.stopChan)
-
-	s.mu.RLock()
-	if s.reader != nil {
-		s.reader.Stop()
+	s.mu.Lock()
+	if s.stopChan != nil {
+		close(s.stopChan)
+		s.stopChan = nil
 	}
-	s.mu.RUnlock()
+	reader := s.reader
+	s.mu.Unlock()
+
+	if reader != nil {
+		reader.Stop()
+	}
 
 	logger.Log("Stream supervisor stopped")
 }
