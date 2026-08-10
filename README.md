@@ -7,6 +7,7 @@ IceTray is a lightweight, system tray-based internet radio player that streams y
 - **Embedded Audio Engine**: Powered by `gopxl/beep` for lightweight, fully self-contained playback. No external dependencies (like `mpv`) needed!
 - **Dropout Protection**: Includes an internal 10-second ring buffer to prevent audio dropouts during minor network hiccups.
 - **System Tray Controls**: Play, pause, stop, change volume, and manage your custom radio stream links right from your system tray.
+- **Built-in Add Stream Dialog**: Add streams through a self-contained dark-themed dialog. No zenity, kdialog, or other external tools required.
 - **Logarithmic Volume Control**: Smooth volume scaling tailored to human hearing.
 - **Auto-Reconnection**: Automatically monitors the stream connection and reconnects with exponential backoff if a dropout occurs.
 - **Autoplay on Startup**: Option to automatically start playing your last stream when you launch your PC.
@@ -45,7 +46,7 @@ If you are instead running the standard headed `icetray-linux` binary on a minim
 
 ```bash
 sudo apt update
-sudo apt install libayatana-appindicator3-1 libgtk-3-0 libasound2
+sudo apt install libayatana-appindicator3-1 libgtk-3-0 libasound2 libgl1 libxcursor1 libxrandr2 libxinerama1 libxi6 libxxf86vm1
 ```
 
 The headless binary (`icetray-headless-linux`) does NOT require GTK or Ayatana AppIndicator packages, only the ALSA library (`libasound2`).

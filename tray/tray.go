@@ -5,7 +5,6 @@ import (
 	"runtime"
 
 	"github.com/getlantern/systray"
-	"github.com/ncruces/zenity"
 
 	"git.jdbnet.co.uk/jamie/icetray/assets"
 	"git.jdbnet.co.uk/jamie/icetray/config"
@@ -13,6 +12,7 @@ import (
 	"git.jdbnet.co.uk/jamie/icetray/player"
 	"git.jdbnet.co.uk/jamie/icetray/startup"
 	"git.jdbnet.co.uk/jamie/icetray/stream"
+	"git.jdbnet.co.uk/jamie/icetray/ui"
 )
 
 // TrayManager manages the system tray UI and events.
@@ -206,37 +206,34 @@ func (tm *TrayManager) handleStop() {
 
 // handleAddStream prompts the user to add a new stream.
 func (tm *TrayManager) handleAddStream() {
-	name, err := zenity.Entry("Enter stream name (e.g., Lofi Radio):", zenity.Title("Add Stream (1/2)"))
-	if err != nil || name == "" {
-		if err != zenity.ErrCanceled {
-			logger.LogError("Failed to get stream name", err)
+	input := ui.AddStreamInput{}
+
+	for {
+		name, url, ok := ui.ShowAddStreamDialog(input)
+		if !ok {
+			return
 		}
+
+		if err := tm.cfg.AddStream(name, url); err != nil {
+			logger.LogError("Failed to save new stream", err)
+			input = ui.AddStreamInput{
+				Name:  name,
+				URL:   url,
+				Error: "Failed to save the stream. Please try again.",
+			}
+			continue
+		}
+
+		item := tm.streamsMenu.AddSubMenuItem(name, url)
+		go func(menuItem *systray.MenuItem, streamURL string) {
+			for range menuItem.ClickedCh {
+				tm.handleStreamSelected(streamURL)
+			}
+		}(item, url)
+
+		logger.Log(fmt.Sprintf("Added new stream: %s (%s)", name, url))
 		return
 	}
-
-	url, err := zenity.Entry("Enter stream URL:", zenity.Title("Add Stream (2/2)"))
-	if err != nil || url == "" {
-		if err != zenity.ErrCanceled {
-			logger.LogError("Failed to get stream URL", err)
-		}
-		return
-	}
-
-	if err := tm.cfg.AddStream(name, url); err != nil {
-		logger.LogError("Failed to save new stream", err)
-		zenity.Error("Failed to save the new stream.", zenity.Title("Error"))
-		return
-	}
-
-	// Add just the new stream to the menu dynamically
-	item := tm.streamsMenu.AddSubMenuItem(name, url)
-	go func(menuItem *systray.MenuItem, streamURL string) {
-		for range menuItem.ClickedCh {
-			tm.handleStreamSelected(streamURL)
-		}
-	}(item, url)
-
-	logger.Log(fmt.Sprintf("Added new stream: %s (%s)", name, url))
 }
 
 // initVolumeMenu populates the volume submenu with presets.

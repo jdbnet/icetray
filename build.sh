@@ -6,7 +6,8 @@ mkdir -p build
 
 echo "==> Building Linux amd64 and Windows (amd64 & arm64) binaries via Docker..."
 docker run --rm -v "$(pwd):/workspace" -w /workspace golang:1.25-bookworm bash -c "
-    apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev
+    apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev \
+        libgl1-mesa-dev xorg-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxxf86vm-dev libwayland-dev
     
     echo '    Building Linux binary (amd64)...'
     GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -buildvcs=false -o build/icetray-linux-amd64 .
@@ -31,7 +32,8 @@ rm -f rsrc_*.syso
 
 echo "==> Building Linux arm64 binaries via Docker (QEMU)..."
 docker run --rm --platform linux/arm64 -v "$(pwd):/workspace" -w /workspace golang:1.25-bookworm bash -c "
-    apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev
+    apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev \
+        libgl1-mesa-dev xorg-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxxf86vm-dev libwayland-dev
     
     echo '    Building Linux binary (arm64)...'
     GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -buildvcs=false -o build/icetray-linux-arm64 .

@@ -22,7 +22,8 @@ jobs:
 
           # Build Linux amd64 and Windows (amd64 & arm64) binaries
           docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace golang:1.25-bookworm bash -c "
-            apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev
+            apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev \
+                libgl1-mesa-dev xorg-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxxf86vm-dev libwayland-dev
             
             # Linux amd64 (needs CGO for GTK bindings)
             GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -buildvcs=false -o dist/icetray-linux-amd64 .
@@ -33,14 +34,15 @@ jobs:
             export PATH=\"\$PATH:\$(go env GOPATH)/bin\"
             go-winres make
             
-            # Windows amd64 & arm64 (no CGO needed)
-            CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -ldflags \"-H=windowsgui\" -o dist/icetray-windows-amd64.exe .
-            CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -buildvcs=false -ldflags \"-H=windowsgui\" -o dist/icetray-windows-arm64.exe .
+            # Windows amd64 & arm64 (CGO needed for Fyne dialogs)
+            CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 go build -buildvcs=false -ldflags \"-H=windowsgui\" -o dist/icetray-windows-amd64.exe .
+            CGO_ENABLED=1 CC=aarch64-w64-mingw32-gcc GOOS=windows GOARCH=arm64 go build -buildvcs=false -ldflags \"-H=windowsgui\" -o dist/icetray-windows-arm64.exe .
           "
 
           # Build Linux arm64 binaries (via QEMU)
           docker run --rm --platform linux/arm64 -v ${{ github.workspace }}:/workspace -w /workspace golang:1.25-bookworm bash -c "
-            apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev
+            apt-get update && apt-get install -y gcc libgtk-3-dev libayatana-appindicator3-dev libasound2-dev \
+                libgl1-mesa-dev xorg-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxxf86vm-dev libwayland-dev
             
             # Linux arm64 (needs CGO for GTK bindings)
             GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -buildvcs=false -o dist/icetray-linux-arm64 .
@@ -53,12 +55,12 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
         run: |
-          aws s3 cp dist/icetray-linux-amd64 s3://apps/icetray/icetray-linux --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
-          aws s3 cp dist/icetray-headless-linux-amd64 s3://apps/icetray/icetray-headless-linux --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
-          aws s3 cp dist/icetray-windows-amd64.exe s3://apps/icetray/icetray-windows.exe --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
-          aws s3 cp dist/icetray-windows-arm64.exe s3://apps/icetray/icetray-windows-arm64.exe --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
-          aws s3 cp dist/icetray-linux-arm64 s3://apps/icetray/icetray-linux-arm64 --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
-          aws s3 cp dist/icetray-headless-linux-arm64 s3://apps/icetray/icetray-headless-linux-arm64 --endpoint-url https://7d5f26fc811bce9e5fce50d5cd9914c6.r2.cloudflarestorage.com
+          aws s3 cp dist/icetray-linux-amd64 s3://apps/icetray/icetray-linux --endpoint-url ${{ secrets.R2_ENDPOINT_URL }}
+          aws s3 cp dist/icetray-headless-linux-amd64 s3://apps/icetray/icetray-headless-linux --endpoint-url ${{ secrets.R2_ENDPOINT_URL }}
+          aws s3 cp dist/icetray-windows-amd64.exe s3://apps/icetray/icetray-windows.exe --endpoint-url ${{ secrets.R2_ENDPOINT_URL }}
+          aws s3 cp dist/icetray-windows-arm64.exe s3://apps/icetray/icetray-windows-arm64.exe --endpoint-url ${{ secrets.R2_ENDPOINT_URL }}
+          aws s3 cp dist/icetray-linux-arm64 s3://apps/icetray/icetray-linux-arm64 --endpoint-url ${{ secrets.R2_ENDPOINT_URL }}
+          aws s3 cp dist/icetray-headless-linux-arm64 s3://apps/icetray/icetray-headless-linux-arm64 --endpoint-url ${{ secrets.R2_ENDPOINT_URL }}
 
       - name: Clean up
         run: sudo rm -rf dist rsrc_*.syso
