@@ -27,7 +27,8 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 export PATH="$(go env GOPATH)/bin:${PATH}"
 
 echo "==> Building Linux headed binary (Wails)..."
-wails build -tags webkit2_41 -clean -o "${OUTDIR}/icetray-linux-arm64"
+wails build -tags webkit2_41 -clean -o icetray-linux-arm64
+install -m 0755 build/bin/icetray-linux-arm64 "${OUTDIR}/icetray-linux-arm64"
 
 echo "==> Building Linux headless binary..."
 GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -buildvcs=false -tags headless -o "${OUTDIR}/icetray-headless-linux-arm64" .

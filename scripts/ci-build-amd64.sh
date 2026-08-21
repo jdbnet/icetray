@@ -28,14 +28,17 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 export PATH="$(go env GOPATH)/bin:${PATH}"
 
 echo "==> Building Linux headed binary (Wails)..."
-wails build -tags webkit2_41 -clean -o "${OUTDIR}/icetray-linux-amd64"
+wails build -tags webkit2_41 -clean -o icetray-linux-amd64
+install -m 0755 build/bin/icetray-linux-amd64 "${OUTDIR}/icetray-linux-amd64"
 
 echo "==> Building Linux headless binary..."
 GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -buildvcs=false -tags headless -o "${OUTDIR}/icetray-headless-linux-amd64" .
 
 echo "==> Building Windows headed binaries (Wails)..."
-wails build -platform windows/amd64 -clean -o "${OUTDIR}/icetray-windows-amd64.exe"
-wails build -platform windows/arm64 -clean -o "${OUTDIR}/icetray-windows-arm64.exe"
+wails build -platform windows/amd64 -clean -o icetray-windows-amd64.exe
+install -m 0755 build/bin/icetray-windows-amd64.exe "${OUTDIR}/icetray-windows-amd64.exe"
+wails build -platform windows/arm64 -clean -o icetray-windows-arm64.exe
+install -m 0755 build/bin/icetray-windows-arm64.exe "${OUTDIR}/icetray-windows-arm64.exe"
 
 echo "==> amd64 build complete:"
-ls -lh "${OUTDIR}/"icetray-linux-amd64 "${OUTDIR}/"icetray-headless-linux-amd64 "${OUTDIR}/"icetray-windows-*.exe 2>/dev/null || ls -lh "${OUTDIR}/"
+ls -lh "${OUTDIR}/"icetray-linux-amd64 "${OUTDIR}/"icetray-headless-linux-amd64 "${OUTDIR}/"icetray-windows-amd64.exe "${OUTDIR}/"icetray-windows-arm64.exe
