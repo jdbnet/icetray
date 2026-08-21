@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media3.common.AudioAttributes
@@ -40,6 +42,7 @@ import uk.co.jdbnet.icetray.metadata.MetadataFetcher
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
@@ -60,7 +63,6 @@ class PlaybackService : MediaSessionService() {
         )
         mediaNotificationProvider.setSmallIcon(R.drawable.ic_notification)
         setMediaNotificationProvider(mediaNotificationProvider)
-        ensurePlayerInitialized()
         PlaybackController.attachService(this)
     }
 
@@ -73,12 +75,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        ensurePlayerInitialized()
         return mediaSession
-    }
-
-    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
-        val requiresForeground = startInForegroundRequired || player?.currentMediaItem != null
-        super.onUpdateNotification(session, requiresForeground)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -119,6 +117,7 @@ class PlaybackService : MediaSessionService() {
         exoPlayer.playWhenReady = true
         startMetadataPolling(stream.url, stream)
         publishState()
+        requestMediaNotificationUpdate()
     }
 
     fun pause() {
@@ -144,14 +143,26 @@ class PlaybackService : MediaSessionService() {
         stopSelf()
     }
 
+    private fun requestMediaNotificationUpdate() {
+        val session = mediaSession ?: return
+        mainHandler.post { onUpdateNotification(session, /* startInForegroundRequired= */ true) }
+    }
+
     private fun ensureNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) != null) return
+        val existing = manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID)
+        if (existing != null) {
+            if (existing.importance < NotificationManager.IMPORTANCE_DEFAULT) {
+                manager.deleteNotificationChannel(NOTIFICATION_CHANNEL_ID)
+            } else {
+                return
+            }
+        }
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
             getString(R.string.playback_notification_channel),
-            NotificationManager.IMPORTANCE_LOW,
+            NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = getString(R.string.playback_notification_channel)
             setShowBadge(false)
@@ -164,8 +175,8 @@ class PlaybackService : MediaSessionService() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(getString(R.string.playback_notification_channel))
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setOngoing(true)
-            .setSilent(true)
             .setContentIntent(
                 PendingIntent.getActivity(
                     this,
@@ -319,6 +330,7 @@ class PlaybackService : MediaSessionService() {
             .setTitle(title)
             .setDisplayTitle(title)
             .setArtist(artist)
+            .setAlbumTitle(artist)
         if (!imagePath.isNullOrBlank()) {
             builder.setArtworkUri(Uri.parse("file://$imagePath"))
         }
