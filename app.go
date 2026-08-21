@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,8 +177,11 @@ func (a *App) PickStreamImage(streamID string) (StreamView, error) {
 			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.webp"},
 		},
 	})
-	if err != nil || path == "" {
+	if err != nil {
 		return StreamView{}, err
+	}
+	if path == "" {
+		return StreamView{}, errDialogCancelled
 	}
 
 	data, err := os.ReadFile(path)
@@ -364,6 +368,8 @@ func (a *App) stopMetadataPoller() {
 }
 
 type invalidInputError string
+
+var errDialogCancelled = errors.New("dialog cancelled")
 
 func (e invalidInputError) Error() string { return string(e) }
 

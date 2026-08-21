@@ -131,8 +131,11 @@ async function deleteStream(stream: StreamView) {
 async function uploadImage(stream: StreamView) {
   try {
     const updated = await PickStreamImage(stream.id)
+    if (!updated?.id) return
     const idx = streams.value.findIndex((s) => s.id === stream.id)
-    if (idx >= 0) streams.value[idx] = updated
+    if (idx >= 0) {
+      streams.value[idx] = { ...streams.value[idx], ...updated }
+    }
   } catch {
     // user cancelled picker
   }
