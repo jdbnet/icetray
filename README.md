@@ -7,7 +7,7 @@ IceTray is a lightweight internet radio player for Icecast streams. It runs in t
 - **Modern player UI**: Vue + Tailwind interface for browsing streams, artwork, volume, and now playing info
 - **Minimal system tray**: Background playback with Open Player, Play, Pause, Stop, and Quit
 - **Embedded audio engine**: Powered by `gopxl/beep` with internal buffering for network hiccups
-- **Icecast metadata**: Best-effort now playing info via `status-json.xsl` when the server exposes it
+- **Icecast metadata**: Best-effort now playing via `/admin/publicstats.json` (Icecast 2.5+) with legacy `status-json.xsl` and ICY stream fallback
 - **Stream artwork**: Upload square images stored in your config folder
 - **Autoplay and launch on login**: Optional startup behaviour
 - **Headless mode**: Terminal-only binary for servers (`--stream` flag)
