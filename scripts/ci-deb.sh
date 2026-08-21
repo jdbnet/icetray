@@ -22,9 +22,14 @@ for arch in amd64 arm64; do
     exit 1
   fi
 
+  mkdir -p dist/nfpm-staging
+  cp "${binary}" dist/nfpm-staging/icetray
+
   NFPM_VERSION="${VERSION}" NFPM_ARCH="${arch}" nfpm package \
     -f nfpm/icetray.yaml \
     -t "dist/icetray_${VERSION}_${arch}.deb"
+
+  rm -rf dist/nfpm-staging
 done
 
 echo "==> Debian packages:"

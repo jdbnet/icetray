@@ -13,7 +13,7 @@ homepage: https://github.com/jdbnet/icetray
 license: MIT
 
 contents:
-  - src: dist/icetray-linux-${NFPM_ARCH}
+  - src: dist/nfpm-staging/icetray
     dst: /usr/local/bin/icetray
     file_info:
       mode: 0755

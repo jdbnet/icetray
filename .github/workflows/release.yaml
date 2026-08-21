@@ -26,7 +26,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  publish:
+  build-amd64:
     needs: version
     if: needs.version.outputs.version != ''
     runs-on: ubuntu-latest
@@ -39,11 +39,77 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
-      - uses: docker/setup-qemu-action@v3
+      - name: Build amd64 and Windows binaries
+        run: bash scripts/ci-build-amd64.sh
 
-      - name: Build binaries
-        run: bash scripts/ci-build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-amd64
+          path: |
+            dist/icetray-linux-amd64
+            dist/icetray-headless-linux-amd64
+            dist/icetray-windows-amd64.exe
+            dist/icetray-windows-arm64.exe
+
+  build-arm64:
+    needs: version
+    if: needs.version.outputs.version != ''
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.version.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build arm64 binaries
+        run: bash scripts/ci-build-arm64.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-arm64
+          path: |
+            dist/icetray-linux-arm64
+            dist/icetray-headless-linux-arm64
+
+  publish:
+    needs: [version, build-amd64, build-arm64]
+    if: needs.version.outputs.version != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.version.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Merge build artifacts
+        run: |
+          mkdir -p dist
+          for dir in dist/dist-*; do
+            [ -d "$dir" ] || continue
+            if [ -d "$dir/dist" ]; then
+              mv "$dir"/dist/* dist/
+            else
+              mv "$dir"/* dist/
+            fi
+          done
+          rm -rf dist/dist-*
+          ls -lh dist/
 
       - name: Build Debian packages
         env:
