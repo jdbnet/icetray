@@ -18,12 +18,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionResult
-import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,24 +43,24 @@ class PlaybackService : MediaSessionService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
-    private var playerInitialized = false
     private val metadataFetcher = MetadataFetcher()
     private var metadataJob: Job? = null
     private var reconnectJob: Job? = null
     private var currentStream: StreamView? = null
     private var currentStreamUrl: String = ""
     private var reconnectAttempt = 0
-    private var placeholderActive = false
 
     override fun onCreate() {
         super.onCreate()
         ensureNotificationChannel()
-        val mediaNotificationProvider = DefaultMediaNotificationProvider.Builder(this)
-            .setChannelId(NOTIFICATION_CHANNEL_ID)
-            .setChannelName(R.string.playback_notification_channel)
-            .build()
+        val mediaNotificationProvider = IceTrayMediaNotificationProvider(
+            this,
+            NOTIFICATION_CHANNEL_ID,
+            R.string.playback_notification_channel,
+        )
         mediaNotificationProvider.setSmallIcon(R.drawable.ic_notification)
         setMediaNotificationProvider(mediaNotificationProvider)
+        ensurePlayerInitialized()
         PlaybackController.attachService(this)
     }
 
@@ -75,13 +73,12 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        ensurePlayerInitialized()
         return mediaSession
     }
 
     override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
-        super.onUpdateNotification(session, startInForegroundRequired)
-        dismissPlaceholderNotification()
+        val requiresForeground = startInForegroundRequired || player?.currentMediaItem != null
+        super.onUpdateNotification(session, requiresForeground)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -98,7 +95,6 @@ class PlaybackService : MediaSessionService() {
         mediaSession = null
         player?.release()
         player = null
-        playerInitialized = false
         serviceScope.cancel()
         PlaybackController.detachService()
         super.onDestroy()
@@ -115,22 +111,14 @@ class PlaybackService : MediaSessionService() {
             MediaItem.Builder()
                 .setUri(stream.url)
                 .setMediaId(stream.id)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(stream.name)
-                        .setArtist(stream.name)
-                        .build(),
-                )
+                .setMediaMetadata(streamMetadata(stream.name, stream.name, stream.imagePath))
                 .build(),
         )
         exoPlayer.volume = 1f
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
-        updateSessionMetadata(stream.name, stream.name, stream.imagePath)
-        mediaSession?.setMediaButtonPreferences(mediaButtonPreferences())
         startMetadataPolling(stream.url, stream)
         publishState()
-        mediaSession?.let { onUpdateNotification(it, /* startInForegroundRequired= */ true) }
     }
 
     fun pause() {
@@ -152,7 +140,6 @@ class PlaybackService : MediaSessionService() {
         player?.clearMediaItems()
         PlaybackController.updateNowPlaying(NowPlaying())
         publishState()
-        dismissPlaceholderNotification()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -164,7 +151,7 @@ class PlaybackService : MediaSessionService() {
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
             getString(R.string.playback_notification_channel),
-            NotificationManager.IMPORTANCE_DEFAULT,
+            NotificationManager.IMPORTANCE_LOW,
         ).apply {
             description = getString(R.string.playback_notification_channel)
             setShowBadge(false)
@@ -173,7 +160,6 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun promoteToForeground(title: String) {
-        if (placeholderActive) return
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -191,22 +177,14 @@ class PlaybackService : MediaSessionService() {
             .build()
         ServiceCompat.startForeground(
             this,
-            PLACEHOLDER_NOTIFICATION_ID,
+            DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID,
             notification,
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
         )
-        placeholderActive = true
-    }
-
-    private fun dismissPlaceholderNotification() {
-        if (!placeholderActive) return
-        placeholderActive = false
-        getSystemService(NotificationManager::class.java)?.cancel(PLACEHOLDER_NOTIFICATION_ID)
     }
 
     private fun ensurePlayerInitialized() {
-        if (playerInitialized) return
-        playerInitialized = true
+        if (player != null) return
         val exoPlayer = buildPlayer()
         player = exoPlayer
         mediaSession = MediaSession.Builder(this, exoPlayer)
@@ -218,7 +196,6 @@ class PlaybackService : MediaSessionService() {
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),
             )
-            .setMediaButtonPreferences(mediaButtonPreferences())
             .setCallback(sessionCallback())
             .build()
         exoPlayer.addListener(object : Player.Listener {
@@ -245,7 +222,6 @@ class PlaybackService : MediaSessionService() {
             ): MediaSession.ConnectionResult {
                 return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                     .setAvailablePlayerCommands(availablePlayerCommands())
-                    .setMediaButtonPreferences(mediaButtonPreferences())
                     .build()
             }
 
@@ -255,7 +231,6 @@ class PlaybackService : MediaSessionService() {
                     MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS,
                     availablePlayerCommands(),
                 )
-                session.setMediaButtonPreferences(controller, mediaButtonPreferences())
             }
 
             override fun onPlayerCommandRequest(
@@ -295,20 +270,6 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
-    }
-
-    private fun mediaButtonPreferences(): ImmutableList<CommandButton> {
-        return ImmutableList.of(
-            CommandButton.Builder()
-                .setPlayerCommand(Player.COMMAND_PLAY_PAUSE)
-                .setDisplayName(getString(R.string.play_pause))
-                .build(),
-            CommandButton.Builder()
-                .setPlayerCommand(Player.COMMAND_STOP)
-                .setDisplayName(getString(R.string.stop))
-                .setIconResId(R.drawable.ic_media_stop)
-                .build(),
-        )
     }
 
     private fun publishState() {
@@ -353,14 +314,19 @@ class PlaybackService : MediaSessionService() {
         metadataJob = null
     }
 
-    private fun updateSessionMetadata(title: String, artist: String, imagePath: String?) {
+    private fun streamMetadata(title: String, artist: String, imagePath: String?): MediaMetadata {
         val builder = MediaMetadata.Builder()
             .setTitle(title)
+            .setDisplayTitle(title)
             .setArtist(artist)
         if (!imagePath.isNullOrBlank()) {
             builder.setArtworkUri(Uri.parse("file://$imagePath"))
         }
-        val metadata = builder.build()
+        return builder.build()
+    }
+
+    private fun updateSessionMetadata(title: String, artist: String, imagePath: String?) {
+        val metadata = streamMetadata(title, artist, imagePath)
         player?.let { exoPlayer ->
             val current = exoPlayer.currentMediaItem ?: return
             exoPlayer.replaceMediaItem(
@@ -386,7 +352,6 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "icetray_playback"
-        private const val PLACEHOLDER_NOTIFICATION_ID = 9999
 
         const val ACTION_START = "uk.co.jdbnet.icetray.action.START"
         const val EXTRA_STREAM_ID = "stream_id"
