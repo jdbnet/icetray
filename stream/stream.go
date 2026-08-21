@@ -67,6 +67,9 @@ func (rb *RingBuffer) Write(data []byte) error {
 			// Direct write without wrap
 			copy(rb.buffer[rb.writePos:], data[:toWrite])
 			rb.writePos += toWrite
+			if rb.writePos == rb.size {
+				rb.writePos = 0
+			}
 		} else {
 			// Write wraps around
 			firstPart := rb.size - rb.writePos
@@ -276,6 +279,8 @@ type Supervisor struct {
 	mu         sync.RWMutex
 	stopChan   chan struct{}
 	isRunning  atomic.Bool
+	session    atomic.Uint64
+	wg         sync.WaitGroup
 	backoff    time.Duration
 	maxBackoff time.Duration
 }
@@ -294,6 +299,8 @@ func NewSupervisor(p *player.Player) *Supervisor {
 func (s *Supervisor) Start(streamURL string) {
 	s.mu.Lock()
 	s.streamURL = streamURL
+	s.session.Add(1)
+	session := s.session.Load()
 	if s.stopChan == nil {
 		s.stopChan = make(chan struct{})
 	}
@@ -306,11 +313,15 @@ func (s *Supervisor) Start(streamURL string) {
 
 	s.backoff = time.Second
 
-	go s.supervise(stopChan)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.supervise(stopChan, session)
+	}()
 }
 
 // supervise is the main supervision loop.
-func (s *Supervisor) supervise(stopChan chan struct{}) {
+func (s *Supervisor) supervise(stopChan chan struct{}, session uint64) {
 	for {
 		select {
 		case <-stopChan:
@@ -322,18 +333,15 @@ func (s *Supervisor) supervise(stopChan chan struct{}) {
 		url := s.streamURL
 		s.mu.RUnlock()
 
-		// Try to establish and maintain connection
-		err := s.attemptConnection(url)
+		err := s.attemptConnection(url, session)
 		if err != nil {
 			logger.LogError("Stream connection lost", err)
 		}
 
-		// Wait before reconnecting with exponential backoff
 		select {
 		case <-stopChan:
 			return
 		case <-time.After(s.backoff):
-			// Increase backoff, capped at maxBackoff
 			s.backoff = s.backoff * 2
 			if s.backoff > s.maxBackoff {
 				s.backoff = s.maxBackoff
@@ -344,9 +352,12 @@ func (s *Supervisor) supervise(stopChan chan struct{}) {
 }
 
 // attemptConnection tries to connect and read from the stream.
-func (s *Supervisor) attemptConnection(url string) error {
+func (s *Supervisor) attemptConnection(url string, session uint64) error {
 	reader := NewStreamReader(url, 1024*1024) // 1MB buffer
 	reader.onConnect = func() {
+		if s.session.Load() != session {
+			return
+		}
 		s.player.SetSource(reader.GetBuffer())
 	}
 	s.mu.Lock()
@@ -356,8 +367,12 @@ func (s *Supervisor) attemptConnection(url string) error {
 	logger.Log("Attempting to connect to stream: " + url)
 	err := reader.Start()
 
+	if err == nil {
+		s.backoff = time.Second
+	}
+
 	s.mu.Lock()
-	if s.reader == reader {
+	if s.session.Load() == session && s.reader == reader {
 		s.player.ClearSource()
 		s.reader = nil
 	}
@@ -372,6 +387,8 @@ func (s *Supervisor) Stop() {
 		return
 	}
 
+	s.session.Add(1)
+
 	s.mu.Lock()
 	if s.stopChan != nil {
 		close(s.stopChan)
@@ -384,6 +401,7 @@ func (s *Supervisor) Stop() {
 		reader.Stop()
 	}
 
+	s.wg.Wait()
 	logger.Log("Stream supervisor stopped")
 }
 

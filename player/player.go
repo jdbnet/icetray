@@ -14,6 +14,16 @@ import (
 	"git.jdbnet.co.uk/jamie/icetray/logger"
 )
 
+const (
+	// preBufferTargetBytes is the preferred amount of data before starting playback (~1s at 128kbps).
+	preBufferTargetBytes = 16 * 1024
+	// preBufferMinBytes is the minimum data required when the max wait elapses.
+	preBufferMinBytes = 4 * 1024
+	// preBufferMaxWait is the longest to wait for the target buffer before starting with less data.
+	preBufferMaxWait = 2 * time.Second
+	preBufferPollInterval = 20 * time.Millisecond
+)
+
 // StreamBuffer interface allows player to consume RingBuffer without direct package dependency.
 type StreamBuffer interface {
 	io.ReadCloser
@@ -57,10 +67,6 @@ func NewPlayer() *Player {
 func (p *Player) Play(streamURL string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	if p.isRunning {
-		return fmt.Errorf("player is already running")
-	}
 
 	p.isRunning = true
 	p.isPaused = false
@@ -114,11 +120,11 @@ func (p *Player) stopActiveStream() {
 
 // playSource decodes and plays the audio source.
 func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
-	// 1. Wait for buffer to fill (target ~10 seconds of buffer).
-	// Target is 200 KB (about 10 seconds at 160kbps).
-	targetBytes := 200 * 1024
+	targetBytes := preBufferTargetBytes
+	minBytes := preBufferMinBytes
 	logger.Log(fmt.Sprintf("playSource: waiting for buffer to fill to %d bytes...", targetBytes))
 
+	deadline := time.Now().Add(preBufferMaxWait)
 	for {
 		select {
 		case <-cancel:
@@ -126,16 +132,32 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 		default:
 		}
 
-		if buf.AvailableData() >= targetBytes {
+		available := buf.AvailableData()
+		if available >= targetBytes {
 			break
 		}
 
 		if buf.IsClosed() {
-			logger.Log("playSource: buffer closed before reaching target size")
+			if available < minBytes {
+				logger.Log("playSource: buffer closed before reaching minimum size")
+				return
+			}
+			logger.Log("playSource: buffer closed, starting with available data")
 			break
 		}
 
-		time.Sleep(50 * time.Millisecond)
+		if time.Now().After(deadline) {
+			if available >= minBytes {
+				logger.Log(fmt.Sprintf("playSource: max wait reached, starting with %d bytes", available))
+				break
+			}
+			if available > 0 {
+				logger.Log(fmt.Sprintf("playSource: max wait reached with %d bytes, starting anyway", available))
+				break
+			}
+		}
+
+		time.Sleep(preBufferPollInterval)
 	}
 
 	select {

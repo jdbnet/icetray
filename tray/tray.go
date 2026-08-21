@@ -3,6 +3,7 @@ package tray
 import (
 	"fmt"
 	"runtime"
+	"sync"
 
 	"github.com/getlantern/systray"
 
@@ -21,6 +22,7 @@ type TrayManager struct {
 	player     *player.Player
 	supervisor *stream.Supervisor
 	startupMgr startup.StartupManager
+	playbackMu sync.Mutex
 
 	// Menu items
 	playItem        *systray.MenuItem
@@ -162,6 +164,9 @@ func (tm *TrayManager) eventLoop() {
 
 // handlePlay starts playing the last stream or prompts to select one.
 func (tm *TrayManager) handlePlay() {
+	tm.playbackMu.Lock()
+	defer tm.playbackMu.Unlock()
+
 	lastStream := tm.cfg.GetLastStream()
 	if lastStream == "" {
 		logger.Log("Play: no stream selected")
@@ -185,6 +190,9 @@ func (tm *TrayManager) handlePlay() {
 
 // handlePause pauses playback.
 func (tm *TrayManager) handlePause() {
+	tm.playbackMu.Lock()
+	defer tm.playbackMu.Unlock()
+
 	if err := tm.player.Pause(); err != nil {
 		logger.LogError("Pause: failed", err)
 		return
@@ -195,6 +203,9 @@ func (tm *TrayManager) handlePause() {
 
 // handleStop stops playback.
 func (tm *TrayManager) handleStop() {
+	tm.playbackMu.Lock()
+	defer tm.playbackMu.Unlock()
+
 	if err := tm.player.Stop(); err != nil {
 		logger.LogError("Stop: failed", err)
 		return
@@ -331,6 +342,9 @@ func (tm *TrayManager) refreshStreamsMenu() {
 
 // handleStreamSelected handles selection of a stream from the menu.
 func (tm *TrayManager) handleStreamSelected(streamURL string) {
+	tm.playbackMu.Lock()
+	defer tm.playbackMu.Unlock()
+
 	// Stop current playback first
 	tm.player.Stop()
 	tm.supervisor.Stop()
