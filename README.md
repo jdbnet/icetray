@@ -14,13 +14,26 @@ IceTray is a lightweight, system tray-based internet radio player that streams y
 
 ## Downloads
 
-Get the latest build of IceTray for your operating system:
+Get the latest build of IceTray for your operating system from [GitHub Releases](https://github.com/jdbnet/icetray/releases/latest):
 
-- 📥 [**Download for Windows (x64)**](https://apps.jdbnet.co.uk/icetray/icetray-windows.exe)
-- 📥 [**Download for Linux (x64)**](https://apps.jdbnet.co.uk/icetray/icetray-linux)
-- 📥 [**Download for Linux (x64 Headless / Terminal-only)**](https://apps.jdbnet.co.uk/icetray/icetray-headless-linux)
-- 📥 [**Download for Linux (ARM64 / Raspberry Pi)**](https://apps.jdbnet.co.uk/icetray/icetray-linux-arm64)
-- 📥 [**Download for Linux (ARM64 Headless / Terminal-only)**](https://apps.jdbnet.co.uk/icetray/icetray-headless-linux-arm64)
+- 📥 [**Download for Windows (x64)**](https://github.com/jdbnet/icetray/releases/latest/download/icetray-windows-amd64.exe)
+- 📥 [**Download for Windows (ARM64)**](https://github.com/jdbnet/icetray/releases/latest/download/icetray-windows-arm64.exe)
+- 📥 [**Download for Linux (x64)**](https://github.com/jdbnet/icetray/releases/latest/download/icetray-linux-amd64)
+- 📥 [**Download for Linux (x64 Headless / Terminal-only)**](https://github.com/jdbnet/icetray/releases/latest/download/icetray-headless-linux-amd64)
+- 📥 [**Download for Linux (ARM64 / Raspberry Pi)**](https://github.com/jdbnet/icetray/releases/latest/download/icetray-linux-arm64)
+- 📥 [**Download for Linux (ARM64 Headless / Terminal-only)**](https://github.com/jdbnet/icetray/releases/latest/download/icetray-headless-linux-arm64)
+
+### APT (Debian/Ubuntu)
+
+Add the JDB-NET apt repository, then install the package:
+
+```bash
+curl -fsSL https://apt.jdbnet.co.uk/install/stable.sh | sudo bash
+sudo apt update
+sudo apt install icetray
+```
+
+This installs the headed Linux binary to `/usr/local/bin/icetray` with a desktop launcher entry.
 
 
 ## How It Works
