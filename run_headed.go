@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"runtime"
 
 	"github.com/wailsapp/wails/v2"
@@ -19,6 +20,11 @@ import (
 	"git.jdbnet.co.uk/jamie/icetray/stream"
 	"git.jdbnet.co.uk/jamie/icetray/tray"
 )
+
+func init() {
+	// WebKitGTK hardware compositing can crash on Wayland with some Nvidia/Mesa drivers.
+	_ = os.Setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+}
 
 // runHeaded initializes the Wails player UI and system tray.
 func runHeaded(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm startup.StartupManager) {
