@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -69,6 +70,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.delay
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import uk.co.jdbnet.icetray.data.StreamView
@@ -105,6 +107,7 @@ fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
             contract = ActivityResultContracts.RequestPermission(),
         ) { }
         LaunchedEffect(Unit) {
+            delay(500)
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
@@ -386,9 +389,13 @@ private fun StreamCard(
                 .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            SmallActionIcon(Icons.Default.Image, "Upload artwork", onArtwork)
-            SmallActionIcon(Icons.Default.Edit, "Edit stream", onEdit)
-            SmallActionIcon(Icons.Default.Delete, "Delete stream", onDelete)
+            AnimatedVisibility(visible = selected) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SmallActionIcon(Icons.Default.Image, "Upload artwork", onArtwork)
+                    SmallActionIcon(Icons.Default.Edit, "Edit stream", onEdit)
+                    SmallActionIcon(Icons.Default.Delete, "Delete stream", onDelete)
+                }
+            }
         }
     }
 }
@@ -551,12 +558,15 @@ private fun SmallActionIcon(
     description: String,
     onClick: () -> Unit,
 ) {
-    IconButton(
-        onClick = onClick,
+    Box(
         modifier = Modifier
             .size(32.dp)
-            .background(Color(0xA6000000), RoundedCornerShape(6.dp)),
+            .semantics { this.contentDescription = description }
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(0xA6000000))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, modifier = Modifier.size(16.dp), tint = Zinc300)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = Zinc300)
     }
 }

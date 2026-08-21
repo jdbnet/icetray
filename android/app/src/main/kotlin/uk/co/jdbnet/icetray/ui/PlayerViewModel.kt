@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import uk.co.jdbnet.icetray.IceTrayApp
 import uk.co.jdbnet.icetray.data.NowPlaying
 import uk.co.jdbnet.icetray.data.PlaybackState
@@ -39,6 +40,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     init {
         viewModelScope.launch {
             refreshAll()
+            delay(1)
             maybeAutoplay()
         }
     }
@@ -69,9 +71,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun playStream(stream: StreamView) {
+        PlaybackController.play(getApplication(), stream)
         viewModelScope.launch {
             configRepository.setLastStreamId(stream.id)
-            PlaybackController.play(getApplication(), stream)
         }
     }
 

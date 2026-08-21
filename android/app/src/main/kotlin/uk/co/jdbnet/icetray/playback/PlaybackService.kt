@@ -16,6 +16,7 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,9 @@ class PlaybackService : MediaSessionService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        if (intent?.action == ACTION_START) {
+            streamFromIntent(intent)?.let { playStream(it) }
+        }
         return START_STICKY
     }
 
@@ -153,6 +157,7 @@ class PlaybackService : MediaSessionService() {
                 ),
             )
             .setMediaButtonPreferences(mediaButtonPreferences())
+            .setCallback(sessionCallback())
             .build()
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -161,9 +166,6 @@ class PlaybackService : MediaSessionService() {
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 publishState()
-                if (playbackState == Player.STATE_IDLE && currentStreamUrl.isNotBlank()) {
-                    scheduleReconnect()
-                }
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -171,6 +173,48 @@ class PlaybackService : MediaSessionService() {
             }
         })
         PlaybackController.onPlayerReady(exoPlayer, mediaSession!!)
+    }
+
+    private fun sessionCallback(): MediaSession.Callback {
+        return object : MediaSession.Callback {
+            override fun onConnect(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+            ): MediaSession.ConnectionResult {
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                    .setAvailablePlayerCommands(availablePlayerCommands())
+                    .setMediaButtonPreferences(mediaButtonPreferences())
+                    .build()
+            }
+
+            override fun onPostConnect(session: MediaSession, controller: MediaSession.ControllerInfo) {
+                session.setAvailableCommands(
+                    controller,
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS,
+                    availablePlayerCommands(),
+                )
+                session.setMediaButtonPreferences(controller, mediaButtonPreferences())
+            }
+
+            override fun onPlayerCommandRequest(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                playerCommand: Int,
+            ): Int {
+                if (playerCommand == Player.COMMAND_STOP) {
+                    stopPlayback()
+                    return SessionResult.RESULT_SUCCESS
+                }
+                return super.onPlayerCommandRequest(session, controller, playerCommand)
+            }
+        }
+    }
+
+    private fun availablePlayerCommands(): Player.Commands {
+        return Player.Commands.Builder()
+            .add(Player.COMMAND_PLAY_PAUSE)
+            .add(Player.COMMAND_STOP)
+            .build()
     }
 
     private fun buildPlayer(): ExoPlayer {
@@ -201,6 +245,7 @@ class PlaybackService : MediaSessionService() {
             CommandButton.Builder()
                 .setPlayerCommand(Player.COMMAND_STOP)
                 .setDisplayName(getString(R.string.stop))
+                .setIconResId(CommandButton.ICON_STOP)
                 .build(),
         )
     }
@@ -286,5 +331,31 @@ class PlaybackService : MediaSessionService() {
         const val EXTRA_STREAM_NAME = "stream_name"
         const val EXTRA_STREAM_URL = "stream_url"
         const val EXTRA_STREAM_IMAGE = "stream_image"
+
+        fun streamFromIntent(intent: Intent): StreamView? {
+            val id = intent.getStringExtra(EXTRA_STREAM_ID).orEmpty()
+            val name = intent.getStringExtra(EXTRA_STREAM_NAME).orEmpty()
+            val url = intent.getStringExtra(EXTRA_STREAM_URL).orEmpty()
+            if (id.isBlank() || name.isBlank() || url.isBlank()) return null
+            val imagePath = intent.getStringExtra(EXTRA_STREAM_IMAGE)?.takeIf { it.isNotBlank() }
+            return StreamView(
+                id = id,
+                name = name,
+                url = url,
+                imagePath = imagePath,
+            )
+        }
+
+        fun intentForStream(context: android.content.Context, stream: StreamView): Intent {
+            return Intent(context, PlaybackService::class.java).apply {
+                action = ACTION_START
+                putExtra(EXTRA_STREAM_ID, stream.id)
+                putExtra(EXTRA_STREAM_NAME, stream.name)
+                putExtra(EXTRA_STREAM_URL, stream.url)
+                if (!stream.imagePath.isNullOrBlank()) {
+                    putExtra(EXTRA_STREAM_IMAGE, stream.imagePath)
+                }
+            }
+        }
     }
 }

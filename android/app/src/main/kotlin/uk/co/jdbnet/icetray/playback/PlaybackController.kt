@@ -79,17 +79,10 @@ object PlaybackController {
     }
 
     fun play(context: Context, stream: StreamView) {
-        val intent = Intent(context, PlaybackService::class.java).apply {
-            action = PlaybackService.ACTION_START
-        }
+        val intent = PlaybackService.intentForStream(context, stream)
         context.startForegroundService(intent)
         bind(context)
-        val active = service
-        if (active != null) {
-            active.playStream(stream)
-        } else {
-            pendingPlay = PendingPlay(stream)
-        }
+        service?.playStream(stream) ?: run { pendingPlay = PendingPlay(stream) }
     }
 
     fun pause() {

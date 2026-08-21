@@ -2,6 +2,8 @@ package uk.co.jdbnet.icetray
 
 import android.app.Application
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.os.StrictMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -17,6 +19,14 @@ class IceTrayApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder()
+                    .detectAll()
+                    .penaltyLog()
+                    .build(),
+            )
+        }
         configRepository = ConfigRepository(this)
         imageStore = ImageStore(configRepository.imagesDirectory())
     }
