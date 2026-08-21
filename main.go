@@ -20,17 +20,8 @@ import (
 )
 
 func main() {
-	// Parse command line flags
 	streamURL := flag.String("stream", "", "Stream URL to play directly in terminal mode")
-	addStreamResult := flag.String("add-stream-result", "", "Internal: write add stream dialog result to this file")
-	addStreamName := flag.String("add-stream-name", "", "Internal: initial stream name for add stream dialog")
-	addStreamURL := flag.String("add-stream-url", "", "Internal: initial stream URL for add stream dialog")
-	addStreamError := flag.String("add-stream-error", "", "Internal: error message for add stream dialog")
 	flag.Parse()
-
-	if runAddStreamDialogIfRequested(*addStreamResult, *addStreamName, *addStreamURL, *addStreamError) {
-		return
-	}
 
 	// Get or create config directory
 	configDir, err := getConfigDir()

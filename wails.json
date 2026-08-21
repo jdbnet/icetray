@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "icetray",
+  "outputfilename": "icetray",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Jamie",
+    "email": "jamie@jdbnet.co.uk"
+  },
+  "info": {
+    "companyName": "JDB-NET",
+    "productName": "IceTray",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright JDB-NET",
+    "comments": "Internet radio player for Icecast streams"
+  }
+}

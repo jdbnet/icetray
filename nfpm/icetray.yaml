@@ -6,8 +6,8 @@ section: sound
 priority: optional
 maintainer: Jamie <jamie@jdbnet.co.uk>
 description: |-
-  Lightweight system tray internet radio player with stream management,
-  volume control, and automatic reconnection.
+  Lightweight system tray internet radio player with a Wails player UI,
+  stream artwork, Icecast now-playing metadata, and automatic reconnection.
 vendor: JDB-NET
 homepage: https://github.com/jdbnet/icetray
 license: MIT
@@ -24,3 +24,8 @@ contents:
 
 deb:
   compression: gzip
+  depends:
+    - libgtk-3-0
+    - libwebkit2gtk-4.1-0
+    - libayatana-appindicator3-1
+    - libasound2

@@ -1,3 +1,5 @@
 build/
 dist/
 arm64-libs/
+frontend/node_modules/
+frontend/dist/

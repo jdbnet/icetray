@@ -315,6 +315,13 @@ func (p *Player) IsRunning() bool {
 	return p.isRunning
 }
 
+// IsPaused returns whether playback is paused.
+func (p *Player) IsPaused() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.isPaused
+}
+
 // Close stops the player and cleans up resources.
 func (p *Player) Close() error {
 	p.Stop()

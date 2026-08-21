@@ -41,6 +41,10 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Build amd64 and Windows binaries
         run: bash scripts/ci-build-amd64.sh
 
@@ -67,6 +71,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Build arm64 binaries
         run: bash scripts/ci-build-arm64.sh
