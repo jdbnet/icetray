@@ -1,0 +1,2 @@
+-keep class uk.co.jdbnet.icetray.data.** { *; }
+-keepclassmembers class uk.co.jdbnet.icetray.data.** { *; }

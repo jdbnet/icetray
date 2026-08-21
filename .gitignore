@@ -3,3 +3,10 @@ dist/
 arm64-libs/
 frontend/node_modules/
 frontend/dist/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.jks
+*.keystore
