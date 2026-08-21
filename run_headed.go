@@ -10,7 +10,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"git.jdbnet.co.uk/jamie/icetray/assets"
 	"git.jdbnet.co.uk/jamie/icetray/config"
@@ -49,9 +48,6 @@ func runHeaded(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm 
 		},
 		Linux: &linux.Options{
 			Icon: assets.Icon,
-		},
-		Windows: &windows.Options{
-			Icon: assets.IconICO,
 		},
 	})
 	if err != nil {
