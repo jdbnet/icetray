@@ -1,8 +1,14 @@
 package uk.co.jdbnet.icetray.playback
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.Uri
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -46,9 +52,11 @@ class PlaybackService : MediaSessionService() {
     private var currentStream: StreamView? = null
     private var currentStreamUrl: String = ""
     private var reconnectAttempt = 0
+    private var inForeground = false
 
     override fun onCreate() {
         super.onCreate()
+        ensureNotificationChannel()
         val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
             .setChannelId(NOTIFICATION_CHANNEL_ID)
             .setChannelName(R.string.playback_notification_channel)
@@ -60,9 +68,9 @@ class PlaybackService : MediaSessionService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        if (intent?.action == ACTION_START) {
-            streamFromIntent(intent)?.let { playStream(it) }
-        }
+        val stream = intent?.takeIf { it.action == ACTION_START }?.let { streamFromIntent(it) }
+        promoteToForeground(stream?.name ?: getString(R.string.app_name))
+        stream?.let { playStream(it) }
         return START_STICKY
     }
 
@@ -138,8 +146,50 @@ class PlaybackService : MediaSessionService() {
         player?.clearMediaItems()
         PlaybackController.updateNowPlaying(NowPlaying())
         publishState()
+        inForeground = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        if (manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) != null) return
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            getString(R.string.playback_notification_channel),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = getString(R.string.playback_notification_channel)
+            setShowBadge(false)
+        }
+        manager.createNotificationChannel(channel)
+    }
+
+    private fun promoteToForeground(title: String) {
+        if (inForeground) return
+        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(getString(R.string.playback_notification_channel))
+            .setOngoing(true)
+            .setSilent(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            .build()
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+        )
+        inForeground = true
     }
 
     private fun ensurePlayerInitialized() {
@@ -211,8 +261,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun availablePlayerCommands(): Player.Commands {
-        return Player.Commands.Builder()
-            .add(Player.COMMAND_PLAY_PAUSE)
+        return MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
             .add(Player.COMMAND_STOP)
             .build()
     }
@@ -245,7 +294,7 @@ class PlaybackService : MediaSessionService() {
             CommandButton.Builder()
                 .setPlayerCommand(Player.COMMAND_STOP)
                 .setDisplayName(getString(R.string.stop))
-                .setIconResId(CommandButton.ICON_STOP)
+                .setIconResId(R.drawable.ic_media_stop)
                 .build(),
         )
     }
@@ -325,6 +374,7 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "icetray_playback"
+        private const val NOTIFICATION_ID = 1001
 
         const val ACTION_START = "uk.co.jdbnet.icetray.action.START"
         const val EXTRA_STREAM_ID = "stream_id"
