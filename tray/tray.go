@@ -16,6 +16,8 @@ import (
 	"git.jdbnet.co.uk/jamie/icetray/ui"
 )
 
+const streamMenuPoolSize = 32
+
 // TrayManager manages the system tray UI and events.
 type TrayManager struct {
 	cfg        *config.Config
@@ -23,6 +25,7 @@ type TrayManager struct {
 	supervisor *stream.Supervisor
 	startupMgr startup.StartupManager
 	playbackMu sync.Mutex
+	menuMu     sync.Mutex
 
 	// Menu items
 	playItem        *systray.MenuItem
@@ -36,6 +39,10 @@ type TrayManager struct {
 	autoplayItem    *systray.MenuItem
 	launchLoginItem *systray.MenuItem
 	quitItem        *systray.MenuItem
+
+	streamMenuPool  []*systray.MenuItem
+	streamURLs      []string
+	streamEmptyItem *systray.MenuItem
 
 	isPlaying bool
 }
@@ -82,7 +89,8 @@ func (tm *TrayManager) onReady() {
 
 	// Streams submenu
 	tm.streamsMenu = systray.AddMenuItem("🎵 Streams", "Saved radio streams")
-	tm.refreshStreamsMenu()
+	tm.initStreamMenuPool()
+	tm.rebuildStreamsMenu()
 
 	// Add Stream item
 	tm.addStreamItem = systray.AddMenuItem("➕ Add Stream", "Add a new stream")
@@ -156,9 +164,6 @@ func (tm *TrayManager) eventLoop() {
 			systray.Quit()
 			return
 		}
-
-		// Handle stream submenu clicks
-		tm.handleStreamMenuClicks()
 	}
 }
 
@@ -235,13 +240,7 @@ func (tm *TrayManager) handleAddStream() {
 			continue
 		}
 
-		item := tm.streamsMenu.AddSubMenuItem(name, url)
-		go func(menuItem *systray.MenuItem, streamURL string) {
-			for range menuItem.ClickedCh {
-				tm.handleStreamSelected(streamURL)
-			}
-		}(item, url)
-
+		tm.rebuildStreamsMenu()
 		logger.Log(fmt.Sprintf("Added new stream: %s (%s)", name, url))
 		return
 	}
@@ -313,30 +312,67 @@ func (tm *TrayManager) handleToggleLaunchOnLogin() {
 	tm.cfg.SetLaunchOnLogin(!enabled)
 }
 
-// handleStreamMenuClicks handles clicks on stream menu items.
-func (tm *TrayManager) handleStreamMenuClicks() {
-	// Note: This is a simplified approach. In a real implementation,
-	// you'd need to track each stream menu item's click channel individually.
-	// For now, we refresh the streams menu periodically or on demand.
-}
+// initStreamMenuPool pre-creates hidden stream menu slots. AppIndicator on Linux
+// does not reliably show submenu items added after startup, but updating existing
+// items via SetTitle/Show works.
+func (tm *TrayManager) initStreamMenuPool() {
+	tm.streamMenuPool = make([]*systray.MenuItem, streamMenuPoolSize)
+	tm.streamURLs = make([]string, streamMenuPoolSize)
 
-// refreshStreamsMenu updates the streams submenu.
-func (tm *TrayManager) refreshStreamsMenu() {
-	streams := tm.cfg.GetStreams()
+	for i := 0; i < streamMenuPoolSize; i++ {
+		item := tm.streamsMenu.AddSubMenuItem("", "")
+		item.Hide()
+		tm.streamMenuPool[i] = item
 
-	for _, stream := range streams {
-		item := tm.streamsMenu.AddSubMenuItem(stream.Name, stream.URL)
-		// Create a closure to capture the stream URL
-		streamURL := stream.URL
+		idx := i
 		go func(menuItem *systray.MenuItem) {
 			for range menuItem.ClickedCh {
-				tm.handleStreamSelected(streamURL)
+				tm.menuMu.Lock()
+				streamURL := tm.streamURLs[idx]
+				tm.menuMu.Unlock()
+				if streamURL != "" {
+					tm.handleStreamSelected(streamURL)
+				}
 			}
 		}(item)
 	}
+}
+
+// rebuildStreamsMenu syncs the streams submenu with the saved config.
+func (tm *TrayManager) rebuildStreamsMenu() {
+	tm.menuMu.Lock()
+	defer tm.menuMu.Unlock()
+
+	streams := tm.cfg.GetStreams()
+	for i := range tm.streamURLs {
+		tm.streamURLs[i] = ""
+	}
+
+	for i, stream := range streams {
+		if i >= streamMenuPoolSize {
+			logger.Log(fmt.Sprintf("Stream menu full, could not show %q", stream.Name))
+			continue
+		}
+
+		item := tm.streamMenuPool[i]
+		tm.streamURLs[i] = stream.URL
+		item.SetTitle(stream.Name)
+		item.SetTooltip(stream.URL)
+		item.Show()
+	}
+
+	for i := len(streams); i < streamMenuPoolSize; i++ {
+		tm.streamMenuPool[i].Hide()
+	}
 
 	if len(streams) == 0 {
-		tm.streamsMenu.AddSubMenuItem("(No streams saved)", "Add streams via Add Stream menu")
+		if tm.streamEmptyItem == nil {
+			tm.streamEmptyItem = tm.streamsMenu.AddSubMenuItem("(No streams saved)", "Add streams via Add Stream menu")
+		} else {
+			tm.streamEmptyItem.Show()
+		}
+	} else if tm.streamEmptyItem != nil {
+		tm.streamEmptyItem.Hide()
 	}
 }
 
