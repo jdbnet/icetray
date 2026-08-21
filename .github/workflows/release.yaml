@@ -116,10 +116,20 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: bash scripts/ci-deb.sh
 
-      - uses: goreleaser/goreleaser-action@v6
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          version: '~> v2'
-          args: release --clean --skip=build
+          tag_name: v${{ needs.version.outputs.version }}
+          name: v${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/icetray-linux-amd64
+            dist/icetray-headless-linux-amd64
+            dist/icetray-linux-arm64
+            dist/icetray-headless-linux-arm64
+            dist/icetray-windows-amd64.exe
+            dist/icetray-windows-arm64.exe
+            dist/icetray_*_*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
