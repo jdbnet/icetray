@@ -21,12 +21,15 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-            if (!keystorePath.isNullOrBlank()) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")?.trim().orEmpty()
+            if (keystorePath.isNotEmpty()) {
+                val keystoreFile = file(keystorePath)
+                if (keystoreFile.isFile) {
+                    storeFile = keystoreFile
+                    storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                    keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                    keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                }
             }
         }
     }
@@ -38,8 +41,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-            if (!keystorePath.isNullOrBlank()) {
+            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")?.trim().orEmpty()
+            if (keystorePath.isNotEmpty() && file(keystorePath).isFile) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }

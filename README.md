@@ -94,3 +94,28 @@ Signed CI builds need these GitHub Actions secrets:
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 
+Generate a keystore locally:
+
+```bash
+keytool -genkeypair -v \
+  -keystore icetray-release.jks \
+  -alias icetray \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+```
+
+Base64-encode it for the GitHub secret (Linux):
+
+```bash
+base64 -w 0 icetray-release.jks
+```
+
+On macOS:
+
+```bash
+base64 -i icetray-release.jks | tr -d '\n'
+```
+
+Paste the output into `ANDROID_KEYSTORE_BASE64`. Set the other three secrets to the passwords and alias you chose in `keytool`. Keep the `.jks` file backed up; losing it means you cannot ship updates signed with the same key.
+
