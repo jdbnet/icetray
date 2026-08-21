@@ -19,7 +19,6 @@ class IceTrayApp : Application() {
         super.onCreate()
         configRepository = ConfigRepository(this)
         imageStore = ImageStore(configRepository.imagesDirectory())
-        PlaybackController.bind(this)
     }
 
     companion object {
@@ -37,7 +36,7 @@ class BootReceiver : android.content.BroadcastReceiver() {
                 val config = app.configRepository.load()
                 if (!config.launchOnLogin || config.lastStreamId.isBlank()) return@launch
                 val view = app.configRepository.getStreams().find { it.id == config.lastStreamId } ?: return@launch
-                PlaybackController.play(context, view, config.volume)
+                PlaybackController.play(context, view)
             } finally {
                 pending.finish()
             }

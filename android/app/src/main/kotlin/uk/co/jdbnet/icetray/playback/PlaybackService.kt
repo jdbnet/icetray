@@ -1,10 +1,8 @@
 package uk.co.jdbnet.icetray.playback
 
 import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -14,21 +12,22 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uk.co.jdbnet.icetray.MainActivity
+import uk.co.jdbnet.icetray.R
 import uk.co.jdbnet.icetray.data.NowPlaying
 import uk.co.jdbnet.icetray.data.PlaybackState
 import uk.co.jdbnet.icetray.data.StreamView
@@ -36,9 +35,10 @@ import uk.co.jdbnet.icetray.metadata.MetadataFetcher
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
+    private var playerInitialized = false
     private val metadataFetcher = MetadataFetcher()
     private var metadataJob: Job? = null
     private var reconnectJob: Job? = null
@@ -48,43 +48,31 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        setMediaNotificationProvider(DefaultMediaNotificationProvider(this))
-        PlaybackController.attachService(this)
-        val exoPlayer = buildPlayer()
-        player = exoPlayer
-        mediaSession = MediaSession.Builder(this, exoPlayer)
-            .setSessionActivity(
-                PendingIntent.getActivity(
-                    this,
-                    0,
-                    Intent(this, MainActivity::class.java),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                ),
-            )
+        val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
+            .setChannelId(NOTIFICATION_CHANNEL_ID)
+            .setChannelName(R.string.playback_notification_channel)
             .build()
-        exoPlayer.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                publishState()
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                publishState()
-                if (playbackState == Player.STATE_ENDED || playbackState == Player.STATE_IDLE) {
-                    stopMetadataPolling()
-                }
-                if (playbackState == Player.STATE_IDLE && currentStreamUrl.isNotBlank()) {
-                    scheduleReconnect()
-                }
-            }
-
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                scheduleReconnect()
-            }
-        })
-        PlaybackController.onPlayerReady(exoPlayer, mediaSession!!)
+        notificationProvider.setSmallIcon(R.drawable.ic_notification)
+        setMediaNotificationProvider(notificationProvider)
+        PlaybackController.attachService(this)
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        return START_STICKY
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        ensurePlayerInitialized()
+        return mediaSession
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (player?.isPlaying == true) {
+            return
+        }
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onDestroy() {
         metadataJob?.cancel()
@@ -93,12 +81,14 @@ class PlaybackService : MediaSessionService() {
         mediaSession = null
         player?.release()
         player = null
+        playerInitialized = false
         serviceScope.cancel()
         PlaybackController.detachService()
         super.onDestroy()
     }
 
-    fun playStream(stream: StreamView, volume: Int) {
+    fun playStream(stream: StreamView) {
+        ensurePlayerInitialized()
         currentStream = stream
         currentStreamUrl = stream.url
         reconnectAttempt = 0
@@ -116,10 +106,11 @@ class PlaybackService : MediaSessionService() {
                 )
                 .build(),
         )
-        exoPlayer.volume = volume / 100f
+        exoPlayer.volume = 1f
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
         updateSessionMetadata(stream.name, stream.name, stream.imagePath)
+        mediaSession?.setMediaButtonPreferences(mediaButtonPreferences())
         startMetadataPolling(stream.url, stream)
         publishState()
     }
@@ -147,9 +138,39 @@ class PlaybackService : MediaSessionService() {
         stopSelf()
     }
 
-    fun setVolume(volume: Int) {
-        player?.volume = volume.coerceIn(0, 100) / 100f
-        publishState()
+    private fun ensurePlayerInitialized() {
+        if (playerInitialized) return
+        playerInitialized = true
+        val exoPlayer = buildPlayer()
+        player = exoPlayer
+        mediaSession = MediaSession.Builder(this, exoPlayer)
+            .setSessionActivity(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            .setMediaButtonPreferences(mediaButtonPreferences())
+            .build()
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                publishState()
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                publishState()
+                if (playbackState == Player.STATE_IDLE && currentStreamUrl.isNotBlank()) {
+                    scheduleReconnect()
+                }
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                scheduleReconnect()
+            }
+        })
+        PlaybackController.onPlayerReady(exoPlayer, mediaSession!!)
     }
 
     private fun buildPlayer(): ExoPlayer {
@@ -167,7 +188,21 @@ class PlaybackService : MediaSessionService() {
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+    }
+
+    private fun mediaButtonPreferences(): ImmutableList<CommandButton> {
+        return ImmutableList.of(
+            CommandButton.Builder()
+                .setPlayerCommand(Player.COMMAND_PLAY_PAUSE)
+                .setDisplayName(getString(R.string.play_pause))
+                .build(),
+            CommandButton.Builder()
+                .setPlayerCommand(Player.COMMAND_STOP)
+                .setDisplayName(getString(R.string.stop))
+                .build(),
+        )
     }
 
     private fun publishState() {
@@ -178,7 +213,7 @@ class PlaybackService : MediaSessionService() {
                 playing = exoPlayer.isPlaying,
                 paused = !exoPlayer.isPlaying && exoPlayer.playbackState != Player.STATE_IDLE,
                 streamId = stream?.id.orEmpty(),
-                volume = (exoPlayer.volume * 100).toInt().coerceIn(0, 100),
+                volume = 100,
             ),
         )
     }
@@ -187,13 +222,13 @@ class PlaybackService : MediaSessionService() {
         metadataJob?.cancel()
         metadataJob = serviceScope.launch {
             while (isActive) {
-                runCatching { metadataFetcher.fetch(streamUrl) }
-                    .onSuccess { np ->
-                        val merged = if (np.station.isBlank()) {
-                            np.copy(station = stream.name)
-                        } else {
-                            np
-                        }
+                val merged = runCatching { metadataFetcher.fetch(streamUrl) }
+                    .getOrNull()
+                    ?.let { np ->
+                        if (np.station.isBlank()) np.copy(station = stream.name) else np
+                    }
+                if (merged != null) {
+                    withContext(Dispatchers.Main) {
                         updateSessionMetadata(
                             merged.title.ifBlank { stream.name },
                             merged.station.ifBlank { stream.name },
@@ -201,6 +236,7 @@ class PlaybackService : MediaSessionService() {
                         )
                         PlaybackController.updateNowPlaying(merged)
                     }
+                }
                 delay(10_000)
             }
         }
@@ -220,13 +256,11 @@ class PlaybackService : MediaSessionService() {
         }
         val metadata = builder.build()
         player?.let { exoPlayer ->
-            val current = exoPlayer.currentMediaItem
-            if (current != null) {
-                exoPlayer.replaceMediaItem(
-                    exoPlayer.currentMediaItemIndex,
-                    current.buildUpon().setMediaMetadata(metadata).build(),
-                )
-            }
+            val current = exoPlayer.currentMediaItem ?: return
+            exoPlayer.replaceMediaItem(
+                exoPlayer.currentMediaItemIndex,
+                current.buildUpon().setMediaMetadata(metadata).build(),
+            )
         }
     }
 
@@ -238,16 +272,19 @@ class PlaybackService : MediaSessionService() {
             delay(delayMs)
             reconnectAttempt++
             val stream = currentStream ?: return@launch
-            playStream(stream, (player?.volume ?: 1f).times(100).toInt())
+            withContext(Dispatchers.Main) {
+                playStream(stream)
+            }
         }
     }
 
     companion object {
+        private const val NOTIFICATION_CHANNEL_ID = "icetray_playback"
+
         const val ACTION_START = "uk.co.jdbnet.icetray.action.START"
         const val EXTRA_STREAM_ID = "stream_id"
         const val EXTRA_STREAM_NAME = "stream_name"
         const val EXTRA_STREAM_URL = "stream_url"
         const val EXTRA_STREAM_IMAGE = "stream_image"
-        const val EXTRA_VOLUME = "volume"
     }
 }

@@ -71,8 +71,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun playStream(stream: StreamView) {
         viewModelScope.launch {
             configRepository.setLastStreamId(stream.id)
-            val volume = configRepository.getSettings().volume
-            PlaybackController.play(getApplication(), stream, volume)
+            PlaybackController.play(getApplication(), stream)
         }
     }
 
@@ -88,14 +87,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun stopPlayback() {
         PlaybackController.stop(getApplication())
-    }
-
-    fun setVolume(volume: Int) {
-        viewModelScope.launch {
-            configRepository.setVolume(volume)
-            PlaybackController.setVolume(volume)
-            _settings.value = configRepository.getSettings()
-        }
     }
 
     fun setAutoplay(enabled: Boolean) {

@@ -28,13 +28,13 @@ object PlaybackController {
     private var player: Player? = null
     private var mediaSession: MediaSession? = null
 
-    private data class PendingPlay(val stream: StreamView, val volume: Int)
+    private data class PendingPlay(val stream: StreamView)
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             bound = true
             pendingPlay?.let { pending ->
-                service?.playStream(pending.stream, pending.volume)
+                service?.playStream(pending.stream)
                 pendingPlay = null
             }
         }
@@ -78,7 +78,7 @@ object PlaybackController {
         service = null
     }
 
-    fun play(context: Context, stream: StreamView, volume: Int) {
+    fun play(context: Context, stream: StreamView) {
         val intent = Intent(context, PlaybackService::class.java).apply {
             action = PlaybackService.ACTION_START
         }
@@ -86,9 +86,9 @@ object PlaybackController {
         bind(context)
         val active = service
         if (active != null) {
-            active.playStream(stream, volume)
+            active.playStream(stream)
         } else {
-            pendingPlay = PendingPlay(stream, volume)
+            pendingPlay = PendingPlay(stream)
         }
     }
 
@@ -105,10 +105,6 @@ object PlaybackController {
         unbind(context)
         updatePlaybackState(PlaybackState())
         updateNowPlaying(NowPlaying())
-    }
-
-    fun setVolume(volume: Int) {
-        service?.setVolume(volume)
     }
 
     fun updatePlaybackState(state: PlaybackState) {

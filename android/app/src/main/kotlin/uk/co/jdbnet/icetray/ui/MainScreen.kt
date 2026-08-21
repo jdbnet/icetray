@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,8 +49,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -67,6 +64,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -154,10 +153,8 @@ fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
                 subtitle = displaySubtitle,
                 listeners = nowPlaying.listeners,
                 playing = playback.playing,
-                volume = playback.volume,
                 onTogglePlay = { viewModel.togglePlay(currentStream) },
                 onStop = viewModel::stopPlayback,
-                onVolumeChange = viewModel::setVolume,
             )
         },
     ) { padding ->
@@ -280,7 +277,7 @@ private fun Header(showSettings: Boolean, onToggleSettings: () -> Unit, onAdd: (
             Text("IceTray", style = MaterialTheme.typography.titleLarge, color = Zinc100)
             Text("Your Icecast stations", style = MaterialTheme.typography.bodySmall, color = Zinc400)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             CircleIconButton(
                 active = showSettings,
                 onClick = onToggleSettings,
@@ -403,10 +400,8 @@ private fun NowPlayingBar(
     subtitle: String,
     listeners: Int,
     playing: Boolean,
-    volume: Int,
     onTogglePlay: () -> Unit,
     onStop: () -> Unit,
-    onVolumeChange: (Int) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -431,8 +426,8 @@ private fun NowPlayingBar(
             }
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Zinc100)
-            Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Zinc400, style = MaterialTheme.typography.bodySmall)
+            Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, color = Zinc100)
+            Text(subtitle, maxLines = 2, overflow = TextOverflow.Ellipsis, color = Zinc400, style = MaterialTheme.typography.bodySmall)
             if (listeners > 0) {
                 Text("$listeners listeners", color = Zinc500, style = MaterialTheme.typography.labelSmall)
             }
@@ -442,16 +437,6 @@ private fun NowPlayingBar(
         }
         CircleIconButton(onClick = onStop, contentDescription = "Stop") {
             Icon(Icons.Default.Stop, contentDescription = null)
-        }
-        Row(modifier = Modifier.width(120.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.VolumeUp, contentDescription = null, tint = Zinc500, modifier = Modifier.size(16.dp))
-            Slider(
-                value = volume.toFloat(),
-                onValueChange = { onVolumeChange(it.toInt()) },
-                valueRange = 0f..100f,
-                modifier = Modifier.weight(1f),
-                colors = SliderDefaults.colors(thumbColor = Emerald, activeTrackColor = Emerald),
-            )
         }
     }
 }
@@ -480,9 +465,13 @@ private fun StreamDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(if (editing == null) "Add stream" else "Edit stream", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (editing == null) "Add stream" else "Edit stream",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Zinc100,
+                )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close")
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Zinc100)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -494,7 +483,9 @@ private fun StreamDialog(
                 Text(error, color = Color(0xFFF87171))
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Cancel") }
+                TextButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Cancel", tint = Zinc100)
+                }
                 Spacer(Modifier.width(8.dp))
                 CircleIconButton(primary = true, onClick = onSave, contentDescription = "Save") {
                     Icon(Icons.Default.Check, contentDescription = null, tint = Color.Black)
@@ -522,12 +513,15 @@ private fun CircleIconButton(
         active -> Emerald.copy(alpha = 0.5f)
         else -> Border
     }
-    IconButton(
-        onClick = onClick,
+    Box(
         modifier = Modifier
             .size(40.dp)
-            .background(bg, CircleShape)
-            .border(1.dp, borderColor, CircleShape),
+            .semantics { this.contentDescription = contentDescription }
+            .clip(CircleShape)
+            .background(bg)
+            .border(1.dp, borderColor, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         content()
     }
