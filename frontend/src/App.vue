@@ -1,4 +1,22 @@
 <script setup lang="ts">
+import {
+  Check,
+  ImagePlus,
+  LoaderCircle,
+  LogIn,
+  Music2,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  Repeat,
+  Settings,
+  Square,
+  Trash2,
+  Users,
+  Volume2,
+  X,
+} from '@lucide/vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   AddStream,
@@ -6,7 +24,7 @@ import {
   GetPlaybackState,
   GetSettings,
   GetStreams,
-  Pause,
+  Pause as PausePlayback,
   PickStreamImage,
   PlayStream,
   RemoveStream,
@@ -22,6 +40,10 @@ import {
   type StreamView,
 } from '../wailsjs/go/main/App.ts'
 import { EventsOn } from '../wailsjs/runtime/runtime.js'
+
+const iconSize = 18
+const iconSizeLg = 22
+const iconSizeSm = 15
 
 const streams = ref<StreamView[]>([])
 const playback = ref<PlaybackState>({ playing: false, paused: false, streamId: '', volume: 80 })
@@ -124,7 +146,7 @@ async function play(stream: StreamView) {
 
 async function togglePlay() {
   if (playback.value.playing) {
-    await Pause()
+    await PausePlayback()
   } else if (playback.value.paused) {
     await Resume()
   } else if (currentStream.value) {
@@ -188,40 +210,53 @@ onUnmounted(() => {
       </div>
       <div class="flex gap-2">
         <button
-          class="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+          class="icon-btn"
+          :class="showSettings ? 'icon-btn-active' : ''"
+          title="Settings"
+          aria-label="Settings"
           @click="showSettings = !showSettings"
         >
-          Settings
+          <Settings :size="iconSize" />
         </button>
-        <button
-          class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-black hover:bg-emerald-400"
-          @click="openAdd"
-        >
-          Add stream
+        <button class="icon-btn icon-btn-primary" title="Add stream" aria-label="Add stream" @click="openAdd">
+          <Plus :size="iconSize" />
         </button>
       </div>
     </header>
 
     <div v-if="showSettings" class="border-b border-white/10 bg-white/5 px-6 py-4">
-      <div class="flex flex-wrap gap-6 text-sm">
-        <label class="flex items-center gap-2">
-          <input type="checkbox" :checked="settings.autoplay" @change="toggleAutoplay" />
-          Autoplay on startup
-        </label>
-        <label class="flex items-center gap-2">
-          <input type="checkbox" :checked="settings.launchOnLogin" @change="toggleLaunchOnLogin" />
-          Launch on login
-        </label>
+      <div class="flex flex-wrap gap-3">
+        <button
+          class="setting-toggle"
+          :class="settings.autoplay ? 'setting-toggle-active' : ''"
+          title="Autoplay on startup"
+          aria-label="Autoplay on startup"
+          @click="toggleAutoplay"
+        >
+          <Repeat :size="iconSizeSm" />
+        </button>
+        <button
+          class="setting-toggle"
+          :class="settings.launchOnLogin ? 'setting-toggle-active' : ''"
+          title="Launch on login"
+          aria-label="Launch on login"
+          @click="toggleLaunchOnLogin"
+        >
+          <LogIn :size="iconSizeSm" />
+        </button>
       </div>
     </div>
 
     <main class="flex-1 overflow-y-auto px-6 py-6">
-      <div v-if="loading" class="text-zinc-400">Loading...</div>
+      <div v-if="loading" class="flex items-center gap-2 text-zinc-400">
+        <LoaderCircle :size="iconSize" class="animate-spin" />
+      </div>
       <div v-else-if="streams.length === 0" class="rounded-2xl border border-dashed border-white/10 p-12 text-center">
-        <p class="text-lg text-zinc-300">No streams yet</p>
+        <Music2 :size="48" class="mx-auto text-zinc-600" />
+        <p class="mt-4 text-lg text-zinc-300">No streams yet</p>
         <p class="mt-2 text-sm text-zinc-500">Add your first Icecast stream to get started.</p>
-        <button class="mt-6 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-black" @click="openAdd">
-          Add stream
+        <button class="icon-btn icon-btn-primary mx-auto mt-6" title="Add stream" aria-label="Add stream" @click="openAdd">
+          <Plus :size="iconSize" />
         </button>
       </div>
       <div v-else class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -232,15 +267,18 @@ onUnmounted(() => {
           :class="playback.streamId === stream.id ? 'ring-2 ring-emerald-400/60' : ''"
         >
           <button class="block w-full text-left" @click="play(stream)">
-            <div class="aspect-square w-full overflow-hidden bg-zinc-900">
+            <div class="relative aspect-square w-full overflow-hidden bg-zinc-900">
               <img
                 v-if="stream.imageData"
                 :src="stream.imageData"
                 :alt="stream.name"
                 class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
               />
-              <div v-else class="flex h-full items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 text-4xl text-zinc-600">
-                ♪
+              <div v-else class="flex h-full items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 text-zinc-600">
+                <Music2 :size="40" />
+              </div>
+              <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                <Play :size="32" class="text-white" fill="currentColor" />
               </div>
             </div>
             <div class="p-3">
@@ -249,9 +287,15 @@ onUnmounted(() => {
             </div>
           </button>
           <div class="absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100">
-            <button class="rounded-md bg-black/60 px-2 py-1 text-xs" @click.stop="uploadImage(stream)">Art</button>
-            <button class="rounded-md bg-black/60 px-2 py-1 text-xs" @click.stop="openEdit(stream)">Edit</button>
-            <button class="rounded-md bg-black/60 px-2 py-1 text-xs text-red-300" @click.stop="deleteStream(stream)">Del</button>
+            <button class="card-action-btn" title="Upload artwork" aria-label="Upload artwork" @click.stop="uploadImage(stream)">
+              <ImagePlus :size="iconSizeSm" />
+            </button>
+            <button class="card-action-btn" title="Edit stream" aria-label="Edit stream" @click.stop="openEdit(stream)">
+              <Pencil :size="iconSizeSm" />
+            </button>
+            <button class="card-action-btn card-action-btn-danger" title="Delete stream" aria-label="Delete stream" @click.stop="deleteStream(stream)">
+              <Trash2 :size="iconSizeSm" />
+            </button>
           </div>
         </article>
       </div>
@@ -266,27 +310,42 @@ onUnmounted(() => {
             class="h-full w-full object-cover"
             alt=""
           />
-          <div v-else class="flex h-full items-center justify-center text-zinc-500">♪</div>
+          <div v-else class="flex h-full items-center justify-center text-zinc-500">
+            <Music2 :size="iconSizeLg" />
+          </div>
         </div>
         <div class="min-w-0 flex-1">
           <p class="truncate font-medium">{{ displayTitle }}</p>
           <p class="truncate text-sm text-zinc-400">{{ displaySubtitle }}</p>
-          <p v-if="nowPlaying.listeners" class="text-xs text-zinc-500">{{ nowPlaying.listeners }} listeners</p>
+          <p v-if="nowPlaying.listeners" class="flex items-center gap-1 text-xs text-zinc-500">
+            <Users :size="12" />
+            {{ nowPlaying.listeners }}
+          </p>
         </div>
         <div class="flex items-center gap-2">
-          <button class="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20" @click="togglePlay">
-            {{ playback.playing ? 'Pause' : 'Play' }}
+          <button
+            class="icon-btn icon-btn-lg"
+            :title="playback.playing ? 'Pause' : 'Play'"
+            :aria-label="playback.playing ? 'Pause' : 'Play'"
+            @click="togglePlay"
+          >
+            <Pause v-if="playback.playing" :size="iconSizeLg" fill="currentColor" />
+            <Play v-else :size="iconSizeLg" fill="currentColor" />
           </button>
-          <button class="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20" @click="stopPlayback">Stop</button>
+          <button class="icon-btn icon-btn-lg" title="Stop" aria-label="Stop" @click="stopPlayback">
+            <Square :size="iconSize" fill="currentColor" />
+          </button>
         </div>
-        <div class="hidden w-40 items-center gap-2 md:flex">
-          <span class="text-xs text-zinc-500">VOL</span>
+        <div class="hidden w-44 items-center gap-2 md:flex">
+          <Volume2 :size="iconSizeSm" class="shrink-0 text-zinc-500" />
           <input
             type="range"
             min="0"
             max="100"
             :value="playback.volume"
             class="w-full accent-emerald-400"
+            :title="`Volume ${playback.volume}%`"
+            :aria-label="`Volume ${playback.volume}%`"
             @input="onVolumeInput"
           />
         </div>
@@ -295,7 +354,12 @@ onUnmounted(() => {
 
     <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div class="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
-        <h3 class="text-lg font-semibold">{{ editing ? 'Edit stream' : 'Add stream' }}</h3>
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">{{ editing ? 'Edit stream' : 'Add stream' }}</h3>
+          <button class="icon-btn" title="Close" aria-label="Close" @click="showModal = false">
+            <X :size="iconSize" />
+          </button>
+        </div>
         <div class="mt-4 space-y-3">
           <input
             v-model="formName"
@@ -310,10 +374,98 @@ onUnmounted(() => {
           <p v-if="formError" class="text-sm text-red-400">{{ formError }}</p>
         </div>
         <div class="mt-6 flex justify-end gap-2">
-          <button class="rounded-lg px-4 py-2 text-sm text-zinc-400 hover:text-white" @click="showModal = false">Cancel</button>
-          <button class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-black" @click="saveStream">Save</button>
+          <button class="icon-btn" title="Cancel" aria-label="Cancel" @click="showModal = false">
+            <X :size="iconSize" />
+          </button>
+          <button class="icon-btn icon-btn-primary" title="Save" aria-label="Save" @click="saveStream">
+            <Check :size="iconSize" />
+          </button>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.05);
+  padding: 0.5rem;
+  color: rgb(212 212 216);
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.icon-btn:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: rgb(255 255 255);
+}
+
+.icon-btn-active {
+  border-color: rgb(52 211 153 / 0.5);
+  background: rgb(52 211 153 / 0.15);
+  color: rgb(110 231 183);
+}
+
+.icon-btn-primary {
+  border-color: rgb(52 211 153 / 0.4);
+  background: rgb(52 211 153);
+  color: rgb(0 0 0);
+}
+
+.icon-btn-primary:hover {
+  background: rgb(74 222 128);
+  color: rgb(0 0 0);
+}
+
+.icon-btn-lg {
+  padding: 0.75rem;
+}
+
+.setting-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(0 0 0 / 0.2);
+  padding: 0.625rem;
+  color: rgb(161 161 170);
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.setting-toggle:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: rgb(228 228 231);
+}
+
+.setting-toggle-active {
+  border-color: rgb(52 211 153 / 0.5);
+  background: rgb(52 211 153 / 0.15);
+  color: rgb(110 231 183);
+}
+
+.card-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  background: rgb(0 0 0 / 0.65);
+  padding: 0.375rem;
+  color: rgb(228 228 231);
+  backdrop-filter: blur(4px);
+  transition: background-color 150ms, color 150ms;
+}
+
+.card-action-btn:hover {
+  background: rgb(0 0 0 / 0.85);
+  color: rgb(255 255 255);
+}
+
+.card-action-btn-danger:hover {
+  color: rgb(252 165 165);
+}
+</style>
