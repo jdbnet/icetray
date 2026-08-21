@@ -12,6 +12,12 @@ vendor: JDB-NET
 homepage: https://github.com/jdbnet/icetray
 license: MIT
 
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+  - libayatana-appindicator3-1
+  - libasound2
+
 contents:
   - src: dist/nfpm-staging/icetray
     dst: /usr/local/bin/icetray
@@ -24,8 +30,3 @@ contents:
 
 deb:
   compression: gzip
-  depends:
-    - libgtk-3-0
-    - libwebkit2gtk-4.1-0
-    - libayatana-appindicator3-1
-    - libasound2
