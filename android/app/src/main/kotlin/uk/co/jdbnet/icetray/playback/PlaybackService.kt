@@ -52,17 +52,17 @@ class PlaybackService : MediaSessionService() {
     private var currentStream: StreamView? = null
     private var currentStreamUrl: String = ""
     private var reconnectAttempt = 0
-    private var inForeground = false
+    private var placeholderActive = false
 
     override fun onCreate() {
         super.onCreate()
         ensureNotificationChannel()
-        val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
+        val mediaNotificationProvider = DefaultMediaNotificationProvider.Builder(this)
             .setChannelId(NOTIFICATION_CHANNEL_ID)
             .setChannelName(R.string.playback_notification_channel)
             .build()
-        notificationProvider.setSmallIcon(R.drawable.ic_notification)
-        setMediaNotificationProvider(notificationProvider)
+        mediaNotificationProvider.setSmallIcon(R.drawable.ic_notification)
+        setMediaNotificationProvider(mediaNotificationProvider)
         PlaybackController.attachService(this)
     }
 
@@ -77,6 +77,11 @@ class PlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         ensurePlayerInitialized()
         return mediaSession
+    }
+
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        super.onUpdateNotification(session, startInForegroundRequired)
+        dismissPlaceholderNotification()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -125,6 +130,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession?.setMediaButtonPreferences(mediaButtonPreferences())
         startMetadataPolling(stream.url, stream)
         publishState()
+        mediaSession?.let { onUpdateNotification(it, /* startInForegroundRequired= */ true) }
     }
 
     fun pause() {
@@ -146,7 +152,7 @@ class PlaybackService : MediaSessionService() {
         player?.clearMediaItems()
         PlaybackController.updateNowPlaying(NowPlaying())
         publishState()
-        inForeground = false
+        dismissPlaceholderNotification()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -158,7 +164,7 @@ class PlaybackService : MediaSessionService() {
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
             getString(R.string.playback_notification_channel),
-            NotificationManager.IMPORTANCE_LOW,
+            NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = getString(R.string.playback_notification_channel)
             setShowBadge(false)
@@ -167,7 +173,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun promoteToForeground(title: String) {
-        if (inForeground) return
+        if (placeholderActive) return
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -185,11 +191,17 @@ class PlaybackService : MediaSessionService() {
             .build()
         ServiceCompat.startForeground(
             this,
-            NOTIFICATION_ID,
+            PLACEHOLDER_NOTIFICATION_ID,
             notification,
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
         )
-        inForeground = true
+        placeholderActive = true
+    }
+
+    private fun dismissPlaceholderNotification() {
+        if (!placeholderActive) return
+        placeholderActive = false
+        getSystemService(NotificationManager::class.java)?.cancel(PLACEHOLDER_NOTIFICATION_ID)
     }
 
     private fun ensurePlayerInitialized() {
@@ -374,7 +386,7 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "icetray_playback"
-        private const val NOTIFICATION_ID = 1001
+        private const val PLACEHOLDER_NOTIFICATION_ID = 9999
 
         const val ACTION_START = "uk.co.jdbnet.icetray.action.START"
         const val EXTRA_STREAM_ID = "stream_id"
