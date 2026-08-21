@@ -3,6 +3,7 @@ package player
 import (
 	"fmt"
 	"io"
+	"math"
 	"sync"
 	"time"
 
@@ -23,6 +24,16 @@ const (
 	preBufferMaxWait = 2 * time.Second
 	preBufferPollInterval = 20 * time.Millisecond
 )
+
+// uiVolumeToEffect maps a 0-100 UI level to beep's exponential Volume field.
+// Gain is linear: 50% UI means 50% amplitude.
+func uiVolumeToEffect(vol int) (volume float64, silent bool) {
+	if vol <= 0 {
+		return 0, true
+	}
+	gain := float64(vol) / 100.0
+	return math.Log2(gain), false
+}
 
 // StreamBuffer interface allows player to consume RingBuffer without direct package dependency.
 type StreamBuffer interface {
@@ -185,13 +196,9 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 		Streamer: streamer,
 		Base:     2.0,
 	}
-	if vol == 0 {
-		volumeEffect.Volume = -10.0
-		volumeEffect.Silent = true
-	} else {
-		volumeEffect.Volume = (float64(vol) - 100.0) / 10.0
-		volumeEffect.Silent = false
-	}
+	beepVol, silent := uiVolumeToEffect(vol)
+	volumeEffect.Volume = beepVol
+	volumeEffect.Silent = silent
 
 	// 4. Resample stream to speaker's sample rate (44100Hz)
 	resampled := beep.Resample(4, format.SampleRate, beep.SampleRate(44100), volumeEffect)
@@ -276,7 +283,7 @@ func (p *Player) Stop() error {
 	return nil
 }
 
-// SetVolume sets the volume (0-100) using a logarithmic mapping.
+// SetVolume sets the volume (0-100). The selected percentage is applied as linear gain.
 func (p *Player) SetVolume(vol int) error {
 	if vol < 0 {
 		vol = 0
@@ -291,13 +298,9 @@ func (p *Player) SetVolume(vol int) error {
 
 	if volEffect != nil {
 		speaker.Lock()
-		if vol == 0 {
-			volEffect.Volume = -10.0
-			volEffect.Silent = true
-		} else {
-			volEffect.Volume = (float64(vol) - 100.0) / 10.0
-			volEffect.Silent = false
-		}
+		beepVol, silent := uiVolumeToEffect(vol)
+		volEffect.Volume = beepVol
+		volEffect.Silent = silent
 		speaker.Unlock()
 	}
 
