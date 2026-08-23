@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/icon.png" alt="Icetray" width="64" />
+  <img src="assets/icon.png" alt="Icetray" width="128" />
 
   # IceTray
 
@@ -27,6 +27,7 @@ Get the latest build from [GitHub Releases](https://github.com/jdbnet/icetray/re
 | Linux (headed) | `icetray-linux-amd64`, `icetray-linux-arm64` |
 | Linux (headless) | `icetray-headless-linux-amd64`, `icetray-headless-linux-arm64` |
 | Windows | `icetray-windows-amd64.exe`, `icetray-windows-arm64.exe` |
+| Windows (installer) | `icetray-windows-amd64-setup.exe`, `icetray-windows-arm64-setup.exe` |
 | Android | `icetray-android.apk` |
 
 ### APT (Debian/Ubuntu)
@@ -70,7 +71,15 @@ Requirements:
 
 ```bash
 cd frontend && npm install && npm run build && cd ..
+bash scripts/set-version.sh
 wails build -tags webkit2_41
+```
+
+Windows installer (from Linux with mingw-w64 and nsis installed):
+
+```bash
+bash scripts/set-version.sh
+wails build -platform windows/amd64,windows/arm64 --nsis
 ```
 
 Headless:

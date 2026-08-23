@@ -11,12 +11,13 @@
     "email": "jamie@jdbnet.co.uk"
   },
   "info": {
-    "companyName": "JDB-NET",
+    "companyName": "JDB-NET Limited",
     "productName": "IceTray",
-    "productVersion": "1.0.0",
-    "copyright": "Copyright JDB-NET",
+    "productVersion": "1.2.7",
+    "copyright": "Copyright JDB-NET Limited",
     "comments": "Internet radio player for Icecast streams"
   },
+  "nsisType": "multiple",
   "preBuildHooks": {
     "*/*": "bash ../../scripts/stage-wails-icons.sh"
   }

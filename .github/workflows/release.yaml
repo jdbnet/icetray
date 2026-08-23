@@ -46,6 +46,8 @@ jobs:
           node-version: "20"
 
       - name: Build amd64 and Windows binaries
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: bash scripts/ci-build-amd64.sh
 
       - uses: actions/upload-artifact@v4
@@ -56,6 +58,8 @@ jobs:
             dist/icetray-headless-linux-amd64
             dist/icetray-windows-amd64.exe
             dist/icetray-windows-arm64.exe
+            dist/icetray-windows-amd64-setup.exe
+            dist/icetray-windows-arm64-setup.exe
 
   build-arm64:
     needs: version
@@ -171,6 +175,8 @@ jobs:
             dist/icetray-headless-linux-arm64
             dist/icetray-windows-amd64.exe
             dist/icetray-windows-arm64.exe
+            dist/icetray-windows-amd64-setup.exe
+            dist/icetray-windows-arm64-setup.exe
             dist/icetray-android.apk
             dist/icetray_*_*.deb
         env:
