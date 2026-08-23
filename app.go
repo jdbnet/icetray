@@ -79,9 +79,16 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
 	if a.cfg.GetAutoplay() {
-		if err := a.PlayLastStream(); err != nil {
-			logger.LogError("Autoplay failed", err)
-		}
+		go func() {
+			// Let Wails and the platform audio stack finish coming up before playback.
+			time.Sleep(500 * time.Millisecond)
+			a.playbackMu.Lock()
+			defer a.playbackMu.Unlock()
+			if err := a.playLastStreamLocked(); err != nil {
+				logger.LogError("Autoplay failed", err)
+			}
+			a.emitPlaybackState()
+		}()
 	} else if a.player.IsRunning() {
 		a.currentID = a.cfg.GetLastStreamID()
 		if a.currentID != "" {
@@ -219,15 +226,26 @@ func (a *App) PickStreamImage(streamID string) (StreamView, error) {
 func (a *App) PlayStream(id string) error {
 	a.playbackMu.Lock()
 	defer a.playbackMu.Unlock()
+	return a.playStreamLocked(id)
+}
 
+func (a *App) stopPlaybackLocked() {
+	a.stopMetadataPoller()
+	a.supervisor.Stop()
+	a.player.Stop()
+}
+
+func (a *App) playStreamLocked(id string) error {
 	s, ok := a.cfg.GetStreamByID(id)
 	if !ok {
 		return errInvalidInput("stream not found")
 	}
 
-	a.player.Stop()
-	a.supervisor.Stop()
-	a.stopMetadataPoller()
+	if a.player.IsPlaying() && a.currentID == id {
+		return nil
+	}
+
+	a.stopPlaybackLocked()
 
 	if err := a.player.Play(s.URL); err != nil {
 		return err
@@ -270,11 +288,7 @@ func (a *App) Stop() error {
 	a.playbackMu.Lock()
 	defer a.playbackMu.Unlock()
 
-	if err := a.player.Stop(); err != nil {
-		return err
-	}
-	a.supervisor.Stop()
-	a.stopMetadataPoller()
+	a.stopPlaybackLocked()
 	a.currentID = ""
 	a.nowPlaying = metadata.NowPlaying{}
 	a.emitNowPlaying()
@@ -393,9 +407,15 @@ func errInvalidInput(msg string) error {
 
 // PlayLastStream plays the last selected stream if any.
 func (a *App) PlayLastStream() error {
+	a.playbackMu.Lock()
+	defer a.playbackMu.Unlock()
+	return a.playLastStreamLocked()
+}
+
+func (a *App) playLastStreamLocked() error {
 	id := a.cfg.GetLastStreamID()
 	if id != "" {
-		return a.PlayStream(id)
+		return a.playStreamLocked(id)
 	}
 	url := a.cfg.GetLastStream()
 	if url == "" {
@@ -403,7 +423,7 @@ func (a *App) PlayLastStream() error {
 	}
 	for _, s := range a.cfg.GetStreams() {
 		if s.URL == url {
-			return a.PlayStream(s.ID)
+			return a.playStreamLocked(s.ID)
 		}
 	}
 	return nil
@@ -447,8 +467,8 @@ func (a *App) TrayStop() {
 // Shutdown cleans up on application exit.
 func (a *App) Shutdown() {
 	a.stopMetadataPoller()
-	_ = a.player.Stop()
 	a.supervisor.Stop()
+	_ = a.player.Stop()
 	logger.Log("Application shutdown")
 }
 

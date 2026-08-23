@@ -297,20 +297,19 @@ func NewSupervisor(p *player.Player) *Supervisor {
 
 // Start begins monitoring the stream with auto-reconnect.
 func (s *Supervisor) Start(streamURL string) {
+	if s.isRunning.Load() {
+		s.Stop()
+	}
+
 	s.mu.Lock()
 	s.streamURL = streamURL
 	s.session.Add(1)
 	session := s.session.Load()
-	if s.stopChan == nil {
-		s.stopChan = make(chan struct{})
-	}
+	s.stopChan = make(chan struct{})
 	stopChan := s.stopChan
 	s.mu.Unlock()
 
-	if s.isRunning.Swap(true) {
-		return
-	}
-
+	s.isRunning.Store(true)
 	s.backoff = time.Second
 
 	s.wg.Add(1)
@@ -390,13 +389,15 @@ func (s *Supervisor) Stop() {
 	s.session.Add(1)
 
 	s.mu.Lock()
-	if s.stopChan != nil {
-		close(s.stopChan)
-		s.stopChan = nil
-	}
+	stopChan := s.stopChan
+	s.stopChan = nil
 	reader := s.reader
+	s.reader = nil
 	s.mu.Unlock()
 
+	if stopChan != nil {
+		close(stopChan)
+	}
 	if reader != nil {
 		reader.Stop()
 	}

@@ -63,10 +63,6 @@ func NewTrayManager(cfg *config.Config, p *player.Player, sup *stream.Supervisor
 // Start registers or runs the system tray.
 func (tm *TrayManager) Start() {
 	tm.player.AddStateChangeListener(tm.syncPlaybackState)
-	if runtime.GOOS == "linux" {
-		systray.Register(tm.onReady, tm.onExit)
-		return
-	}
 	go systray.Run(tm.onReady, tm.onExit)
 }
 

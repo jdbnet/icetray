@@ -57,23 +57,12 @@ type Player struct {
 	stateListeners []func()
 }
 
-// NewPlayer creates a new Player instance and initialises the speaker once.
+// NewPlayer creates a new Player instance. Speaker output is initialised lazily on first playback.
 func NewPlayer() *Player {
-	p := &Player{
-		volume:    100, // Default volume
+	return &Player{
+		volume:    100,
 		isRunning: false,
 	}
-
-	sr := beep.SampleRate(44100)
-	err := speaker.Init(sr, sr.N(time.Second/10))
-	if err != nil {
-		logger.LogError("Failed to initialize speaker", err)
-	} else {
-		p.speakerReady = true
-		logger.Log("Speaker initialized successfully at 44100Hz")
-	}
-
-	return p
 }
 
 // AddStateChangeListener registers a callback for playback state transitions.
@@ -92,12 +81,13 @@ func (p *Player) notifyStateChange() {
 	}
 }
 
+const speakerSampleRate = beep.SampleRate(44100)
+
 func (p *Player) ensureSpeaker() error {
 	if p.speakerReady {
 		return nil
 	}
-	sr := beep.SampleRate(44100)
-	err := speaker.Init(sr, sr.N(time.Second/10))
+	err := speaker.Init(speakerSampleRate, speakerSampleRate.N(time.Second/10))
 	if err != nil {
 		return err
 	}
@@ -147,23 +137,23 @@ func (p *Player) ClearSource() {
 }
 
 // stopActiveStream stops the active streamer and cancels the goroutine. Must be called with p.mu locked.
+// The stream buffer is owned by the supervisor; do not close it here.
 func (p *Player) stopActiveStream() {
 	if p.activeCancel != nil {
 		close(p.activeCancel)
 		p.activeCancel = nil
 	}
-	if p.activeBuf != nil {
-		p.activeBuf.Close()
-		p.activeBuf = nil
-	}
-	speaker.Clear()
+	p.activeBuf = nil
+
 	speaker.Lock()
+	speaker.Clear()
 	if p.ctrl != nil {
 		p.ctrl.Streamer = nil
 		p.ctrl = nil
 	}
 	p.volumeEffect = nil
 	speaker.Unlock()
+
 	if p.audioActive {
 		p.audioActive = false
 		go p.notifyStateChange()
@@ -248,14 +238,17 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 	volumeEffect.Volume = beepVol
 	volumeEffect.Silent = silent
 
-	// 4. Resample stream to speaker's sample rate (44100Hz)
-	resampled := beep.Resample(4, format.SampleRate, beep.SampleRate(44100), volumeEffect)
+	// 4. Resample to the speaker rate when needed
+	var output beep.Streamer = volumeEffect
+	if format.SampleRate != speakerSampleRate {
+		output = beep.Resample(4, format.SampleRate, speakerSampleRate, volumeEffect)
+	}
 
 	// 5. Wrap in Ctrl to support Pause/Resume
 	p.mu.Lock()
 	isPaused := p.isPaused
 	ctrl := &beep.Ctrl{
-		Streamer: resampled,
+		Streamer: output,
 		Paused:   isPaused,
 	}
 	p.ctrl = ctrl
@@ -263,7 +256,9 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 	p.mu.Unlock()
 
 	// 6. Play on speaker
+	speaker.Lock()
 	speaker.Play(ctrl)
+	speaker.Unlock()
 	logger.Log("playSource: speaker playback started")
 
 	p.mu.Lock()
