@@ -12,19 +12,11 @@ echo "==> Installing build dependencies..."
 sudo apt-get update -qq
 sudo apt-get install -y -qq ${LINUX_PACKAGES}
 
-echo "==> Building frontend..."
-cd frontend
-if [ -f package-lock.json ]; then
-  npm ci --no-audit --no-fund
-else
-  npm install --no-audit --no-fund
-fi
-npm run build
-cd ..
-
 echo "==> Installing Wails CLI..."
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 export PATH="$(go env GOPATH)/bin:${PATH}"
+
+bash scripts/set-version.sh
 
 echo "==> Building Linux headed binary (Wails)..."
 wails build -tags webkit2_41 -clean -o icetray-linux-arm64

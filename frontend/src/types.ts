@@ -26,22 +26,3 @@ export interface NowPlaying {
   genre?: string
   listeners?: number
 }
-
-export {
-  AddStream,
-  GetNowPlaying,
-  GetPlaybackState,
-  GetSettings,
-  GetStreams,
-  Pause,
-  PickStreamImage,
-  PlayStream,
-  RemoveStream,
-  Resume,
-  SetAutoplay,
-  SetLaunchMinimized,
-  SetLaunchOnLogin,
-  SetVolume,
-  Stop,
-  UpdateStream,
-} from './App.js'

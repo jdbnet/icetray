@@ -76,7 +76,6 @@ Requirements:
 - [Wails CLI](https://wails.io/docs/gettingstarted/installation)
 
 ```bash
-cd frontend && npm install && npm run build && cd ..
 bash scripts/set-version.sh
 wails build -tags webkit2_41
 ```

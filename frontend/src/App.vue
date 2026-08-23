@@ -33,11 +33,8 @@ import {
   SetVolume,
   Stop,
   UpdateStream,
-  type NowPlaying,
-  type PlaybackState,
-  type SettingsView,
-  type StreamView,
-} from '../wailsjs/go/main/App.ts'
+} from '../wailsjs/go/main/App.js'
+import type { NowPlaying, PlaybackState, SettingsView, StreamView } from './types'
 import { EventsOn } from '../wailsjs/runtime/runtime.js'
 
 const iconSize = 18
