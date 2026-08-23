@@ -40,8 +40,9 @@ object PlaybackController {
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            // The service reference is managed by attachService/detachService.
+            // Clearing it here left playback running with no way to stop from the UI.
             bound = false
-            service = null
         }
     }
 
@@ -75,12 +76,12 @@ object PlaybackController {
             context.applicationContext.unbindService(connection)
         }
         bound = false
-        service = null
     }
 
     fun play(context: Context, stream: StreamView) {
-        val intent = PlaybackService.intentForStream(context, stream)
-        context.startForegroundService(intent)
+        val appContext = context.applicationContext
+        val intent = PlaybackService.intentForStream(appContext, stream)
+        appContext.startForegroundService(intent)
         bind(context)
         service?.playStream(stream) ?: run { pendingPlay = PendingPlay(stream) }
     }
@@ -94,7 +95,12 @@ object PlaybackController {
     }
 
     fun stop(context: Context) {
-        service?.stopPlayback()
+        val appContext = context.applicationContext
+        // Always deliver stop through the service so playback ends even if our
+        // in-memory reference was cleared after an activity unbind.
+        service?.stopPlayback() ?: run {
+            appContext.startService(PlaybackService.intentForStop(appContext))
+        }
         unbind(context)
         updatePlaybackState(PlaybackState())
         updateNowPlaying(NowPlaying())

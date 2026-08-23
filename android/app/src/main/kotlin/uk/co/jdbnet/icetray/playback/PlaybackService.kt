@@ -68,10 +68,19 @@ class PlaybackService : MediaSessionService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        val stream = intent?.takeIf { it.action == ACTION_START }?.let { streamFromIntent(it) }
-        promoteToForeground(stream?.name ?: getString(R.string.app_name))
-        stream?.let { playStream(it) }
-        return START_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopPlayback()
+                return START_NOT_STICKY
+            }
+            ACTION_START -> {
+                val stream = streamFromIntent(intent)
+                promoteToForeground(stream?.name ?: getString(R.string.app_name))
+                stream?.let { playStream(it) }
+                return START_STICKY
+            }
+            else -> return START_NOT_STICKY
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -80,9 +89,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (player?.isPlaying == true) {
-            return
-        }
+        stopPlayback()
         super.onTaskRemoved(rootIntent)
     }
 
@@ -132,11 +139,16 @@ class PlaybackService : MediaSessionService() {
 
     fun stopPlayback() {
         reconnectJob?.cancel()
+        reconnectJob = null
         stopMetadataPolling()
         currentStream = null
         currentStreamUrl = ""
-        player?.stop()
-        player?.clearMediaItems()
+        reconnectAttempt = 0
+        player?.let { exoPlayer ->
+            exoPlayer.playWhenReady = false
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
+        }
         PlaybackController.updateNowPlaying(NowPlaying())
         publishState()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -366,6 +378,7 @@ class PlaybackService : MediaSessionService() {
         private const val NOTIFICATION_CHANNEL_ID = "icetray_playback"
 
         const val ACTION_START = "uk.co.jdbnet.icetray.action.START"
+        const val ACTION_STOP = "uk.co.jdbnet.icetray.action.STOP"
         const val EXTRA_STREAM_ID = "stream_id"
         const val EXTRA_STREAM_NAME = "stream_name"
         const val EXTRA_STREAM_URL = "stream_url"
@@ -383,6 +396,12 @@ class PlaybackService : MediaSessionService() {
                 url = url,
                 imagePath = imagePath,
             )
+        }
+
+        fun intentForStop(context: android.content.Context): Intent {
+            return Intent(context, PlaybackService::class.java).apply {
+                action = ACTION_STOP
+            }
         }
 
         fun intentForStream(context: android.content.Context, stream: StreamView): Intent {
