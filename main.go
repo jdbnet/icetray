@@ -102,18 +102,7 @@ func main() {
 		}
 	}
 
-	// If autoplay is enabled and we have a last stream, start playing
-	if cfg.GetAutoplay() && cfg.GetLastStream() != "" {
-		logger.Log("Autoplay enabled, starting stream: " + cfg.GetLastStream())
-		if err := player.Play(cfg.GetLastStream()); err != nil {
-			logger.LogError("Failed to start autoplay stream", err)
-		} else {
-			supervisor.Start(cfg.GetLastStream())
-			// Set initial volume
-			player.SetVolume(cfg.GetVolume())
-		}
-	}
-
+	// Autoplay runs from App.startup once the UI is ready.
 	// Initialize and run system tray (or block if headless)
 	runHeaded(cfg, player, supervisor, startupMgr)
 

@@ -55,13 +55,14 @@ func NewTrayManager(cfg *config.Config, p *player.Player, sup *stream.Supervisor
 		supervisor: sup,
 		startupMgr: sm,
 		app:        app,
-		isPlaying:  p.IsRunning(),
+		isPlaying:  p.IsPlaying(),
 		done:       make(chan struct{}),
 	}
 }
 
 // Start registers or runs the system tray.
 func (tm *TrayManager) Start() {
+	tm.player.AddStateChangeListener(tm.syncPlaybackState)
 	if runtime.GOOS == "linux" {
 		systray.Register(tm.onReady, tm.onExit)
 		return
@@ -77,6 +78,13 @@ func (tm *TrayManager) Wait() {
 // Quit stops the tray icon.
 func (tm *TrayManager) Quit() {
 	systray.Quit()
+}
+
+func (tm *TrayManager) syncPlaybackState() {
+	tm.playbackMu.Lock()
+	tm.isPlaying = tm.player.IsPlaying()
+	tm.playbackMu.Unlock()
+	tm.updateMenuState()
 }
 
 func (tm *TrayManager) onReady() {
@@ -161,7 +169,7 @@ func (tm *TrayManager) handlePlay() {
 	tm.playbackMu.Lock()
 	defer tm.playbackMu.Unlock()
 	tm.app.TrayPlay()
-	tm.isPlaying = tm.player.IsRunning() && !tm.player.IsPaused()
+	tm.isPlaying = tm.player.IsPlaying()
 	tm.updateMenuState()
 }
 
@@ -169,7 +177,7 @@ func (tm *TrayManager) handlePause() {
 	tm.playbackMu.Lock()
 	defer tm.playbackMu.Unlock()
 	tm.app.TrayPause()
-	tm.isPlaying = false
+	tm.isPlaying = tm.player.IsPlaying()
 	tm.updateMenuState()
 }
 

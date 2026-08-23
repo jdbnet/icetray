@@ -64,17 +64,24 @@ type App struct {
 
 // NewApp creates the Wails app bindings.
 func NewApp(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm startup.StartupManager) *App {
-	return &App{
+	a := &App{
 		cfg:        cfg,
 		player:     p,
 		supervisor: sup,
 		startupMgr: sm,
 	}
+	p.AddStateChangeListener(a.emitPlaybackState)
+	return a
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	if a.player.IsRunning() {
+
+	if a.cfg.GetAutoplay() {
+		if err := a.PlayLastStream(); err != nil {
+			logger.LogError("Autoplay failed", err)
+		}
+	} else if a.player.IsRunning() {
 		a.currentID = a.cfg.GetLastStreamID()
 		if a.currentID != "" {
 			if s, ok := a.cfg.GetStreamByID(a.currentID); ok {
@@ -277,7 +284,7 @@ func (a *App) Stop() error {
 // GetPlaybackState returns current playback state.
 func (a *App) GetPlaybackState() PlaybackState {
 	return PlaybackState{
-		Playing:  a.player.IsRunning() && !a.player.IsPaused(),
+		Playing:  a.player.IsPlaying(),
 		Paused:   a.player.IsRunning() && a.player.IsPaused(),
 		StreamID: a.currentID,
 		Volume:   a.cfg.GetVolume(),
@@ -397,9 +404,11 @@ func (a *App) PlayLastStream() error {
 
 // TrayPlay handles play from the system tray.
 func (a *App) TrayPlay() {
-	if a.player.IsRunning() {
-		_ = a.player.Resume()
-		a.emitPlaybackState()
+	if a.player.IsRunning() && a.player.IsPaused() {
+		_ = a.Resume()
+		return
+	}
+	if a.player.IsPlaying() {
 		return
 	}
 

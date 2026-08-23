@@ -44,14 +44,17 @@ type StreamBuffer interface {
 
 // Player manages the beep-based audio decoding and playback lifecycle.
 type Player struct {
-	mu           sync.RWMutex
-	volume       int
-	isRunning    bool
-	isPaused     bool
-	activeBuf    StreamBuffer
-	activeCancel chan struct{}
-	ctrl         *beep.Ctrl
-	volumeEffect *effects.Volume
+	mu             sync.RWMutex
+	volume         int
+	speakerReady   bool
+	isRunning      bool
+	isPaused       bool
+	audioActive    bool
+	activeBuf      StreamBuffer
+	activeCancel   chan struct{}
+	ctrl           *beep.Ctrl
+	volumeEffect   *effects.Volume
+	stateListeners []func()
 }
 
 // NewPlayer creates a new Player instance and initialises the speaker once.
@@ -61,26 +64,60 @@ func NewPlayer() *Player {
 		isRunning: false,
 	}
 
-	// Initialize speaker once at startup
 	sr := beep.SampleRate(44100)
-	// buffer size of 1/10s (4410 samples)
 	err := speaker.Init(sr, sr.N(time.Second/10))
 	if err != nil {
 		logger.LogError("Failed to initialize speaker", err)
 	} else {
+		p.speakerReady = true
 		logger.Log("Speaker initialized successfully at 44100Hz")
 	}
 
 	return p
 }
 
-// Play starts playing an audio stream (sets state).
+// AddStateChangeListener registers a callback for playback state transitions.
+func (p *Player) AddStateChangeListener(fn func()) {
+	p.mu.Lock()
+	p.stateListeners = append(p.stateListeners, fn)
+	p.mu.Unlock()
+}
+
+func (p *Player) notifyStateChange() {
+	p.mu.RLock()
+	listeners := append([]func(){}, p.stateListeners...)
+	p.mu.RUnlock()
+	for _, fn := range listeners {
+		fn()
+	}
+}
+
+func (p *Player) ensureSpeaker() error {
+	if p.speakerReady {
+		return nil
+	}
+	sr := beep.SampleRate(44100)
+	err := speaker.Init(sr, sr.N(time.Second/10))
+	if err != nil {
+		return err
+	}
+	p.speakerReady = true
+	logger.Log("Speaker initialized successfully at 44100Hz")
+	return nil
+}
+
+// Play starts playing an audio stream (sets intent-to-play state).
 func (p *Player) Play(streamURL string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if err := p.ensureSpeaker(); err != nil {
+		return fmt.Errorf("audio output not available: %w", err)
+	}
+
 	p.isRunning = true
 	p.isPaused = false
+	p.audioActive = false
 	logger.Log("Play: player running state set for stream " + streamURL)
 	return nil
 }
@@ -127,6 +164,10 @@ func (p *Player) stopActiveStream() {
 	}
 	p.volumeEffect = nil
 	speaker.Unlock()
+	if p.audioActive {
+		p.audioActive = false
+		go p.notifyStateChange()
+	}
 }
 
 // playSource decodes and plays the audio source.
@@ -166,6 +207,8 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 				logger.Log(fmt.Sprintf("playSource: max wait reached with %d bytes, starting anyway", available))
 				break
 			}
+			logger.Log("playSource: max wait reached with no stream data")
+			return
 		}
 
 		time.Sleep(preBufferPollInterval)
@@ -186,6 +229,11 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 		return
 	}
 	defer streamer.Close()
+
+	if err := p.ensureSpeaker(); err != nil {
+		logger.LogError("playSource: speaker not available", err)
+		return
+	}
 
 	// 3. Setup volume effect
 	p.mu.Lock()
@@ -218,6 +266,11 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 	speaker.Play(ctrl)
 	logger.Log("playSource: speaker playback started")
 
+	p.mu.Lock()
+	p.audioActive = true
+	p.mu.Unlock()
+	p.notifyStateChange()
+
 	// 7. Wait until finished or cancelled
 	<-cancel
 	logger.Log("playSource: playback goroutine exiting")
@@ -242,6 +295,7 @@ func (p *Player) Pause() error {
 		speaker.Unlock()
 	}
 	logger.Log("Pause: playback paused")
+	go p.notifyStateChange()
 	return nil
 }
 
@@ -264,6 +318,7 @@ func (p *Player) Resume() error {
 		speaker.Unlock()
 	}
 	logger.Log("Resume: playback resumed")
+	go p.notifyStateChange()
 	return nil
 }
 
@@ -280,6 +335,7 @@ func (p *Player) Stop() error {
 	p.isRunning = false
 	p.isPaused = false
 	logger.Log("Stop: playback stopped")
+	go p.notifyStateChange()
 	return nil
 }
 
@@ -320,6 +376,13 @@ func (p *Player) IsPaused() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.isPaused
+}
+
+// IsPlaying returns whether audio is actively being output (connected, decoded, and not paused).
+func (p *Player) IsPlaying() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.isRunning && !p.isPaused && p.audioActive
 }
 
 // Close stops the player and cleans up resources.
