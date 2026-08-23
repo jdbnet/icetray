@@ -44,6 +44,12 @@ Install the release APK on your device. On first launch, allow notifications so 
 
 Stream library and settings are stored locally on the device.
 
+### Windows
+
+Use the `*-setup.exe` installer from releases. It installs IceTray under Program Files and is much less likely to trigger false positives from Windows Defender than running a loose `.exe` from Downloads.
+
+Launch on login creates a shortcut in your Startup folder (not a Registry Run key).
+
 ## Linux runtime dependencies (headed)
 
 The headed desktop app needs:
