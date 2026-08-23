@@ -23,9 +23,10 @@ type Config struct {
 	Streams       []Stream `json:"streams"`
 	LastStream    string   `json:"last_stream"`
 	LastStreamID  string   `json:"last_stream_id,omitempty"`
-	Autoplay      bool     `json:"autoplay"`
-	Volume        int      `json:"volume"`
-	LaunchOnLogin bool     `json:"launch_on_login"`
+	Autoplay         bool `json:"autoplay"`
+	Volume           int  `json:"volume"`
+	LaunchOnLogin    bool `json:"launch_on_login"`
+	LaunchMinimized  bool `json:"launch_minimized"`
 
 	configPath string
 	imagesDir  string
@@ -280,6 +281,14 @@ func (c *Config) SetLaunchOnLogin(launchOnLogin bool) error {
 	return c.Save()
 }
 
+// SetLaunchMinimized sets whether the player window stays hidden until opened from the tray.
+func (c *Config) SetLaunchMinimized(launchMinimized bool) error {
+	c.mu.Lock()
+	c.LaunchMinimized = launchMinimized
+	c.mu.Unlock()
+	return c.Save()
+}
+
 // GetVolume returns the current volume.
 func (c *Config) GetVolume() int {
 	c.mu.RLock()
@@ -320,4 +329,11 @@ func (c *Config) GetLaunchOnLogin() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.LaunchOnLogin
+}
+
+// GetLaunchMinimized returns whether the player window should start hidden.
+func (c *Config) GetLaunchMinimized() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.LaunchMinimized
 }

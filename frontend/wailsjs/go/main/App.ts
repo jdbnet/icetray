@@ -16,6 +16,7 @@ export interface PlaybackState {
 export interface SettingsView {
   autoplay: boolean
   launchOnLogin: boolean
+  launchMinimized: boolean
   volume: number
 }
 
@@ -38,6 +39,7 @@ export {
   RemoveStream,
   Resume,
   SetAutoplay,
+  SetLaunchMinimized,
   SetLaunchOnLogin,
   SetVolume,
   Stop,

@@ -54,6 +54,10 @@ export function SetLaunchOnLogin(enabled) {
   return window.go.main.App.SetLaunchOnLogin(enabled)
 }
 
+export function SetLaunchMinimized(enabled) {
+  return window.go.main.App.SetLaunchMinimized(enabled)
+}
+
 export function GetNowPlaying() {
   return window.go.main.App.GetNowPlaying()
 }

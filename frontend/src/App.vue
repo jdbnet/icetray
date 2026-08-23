@@ -3,13 +3,11 @@ import {
   Check,
   ImagePlus,
   LoaderCircle,
-  LogIn,
   Music2,
   Pause,
   Pencil,
   Play,
   Plus,
-  Repeat,
   Settings,
   Square,
   Trash2,
@@ -30,6 +28,7 @@ import {
   RemoveStream,
   Resume,
   SetAutoplay,
+  SetLaunchMinimized,
   SetLaunchOnLogin,
   SetVolume,
   Stop,
@@ -47,7 +46,12 @@ const iconSizeSm = 15
 
 const streams = ref<StreamView[]>([])
 const playback = ref<PlaybackState>({ playing: false, paused: false, streamId: '', volume: 80 })
-const settings = ref<SettingsView>({ autoplay: false, launchOnLogin: false, volume: 80 })
+const settings = ref<SettingsView>({
+  autoplay: false,
+  launchOnLogin: false,
+  launchMinimized: false,
+  volume: 80,
+})
 const nowPlaying = ref<NowPlaying>({ station: '', title: '' })
 
 const showModal = ref(false)
@@ -172,16 +176,19 @@ async function onVolumeInput(event: Event) {
   await SetVolume(value)
 }
 
-async function toggleAutoplay() {
-  const next = !settings.value.autoplay
-  await SetAutoplay(next)
-  settings.value.autoplay = next
+async function setAutoplay(enabled: boolean) {
+  await SetAutoplay(enabled)
+  settings.value.autoplay = enabled
 }
 
-async function toggleLaunchOnLogin() {
-  const next = !settings.value.launchOnLogin
-  await SetLaunchOnLogin(next)
-  settings.value.launchOnLogin = next
+async function setLaunchOnLogin(enabled: boolean) {
+  await SetLaunchOnLogin(enabled)
+  settings.value.launchOnLogin = enabled
+}
+
+async function setLaunchMinimized(enabled: boolean) {
+  await SetLaunchMinimized(enabled)
+  settings.value.launchMinimized = enabled
 }
 
 onMounted(async () => {
@@ -228,25 +235,53 @@ onUnmounted(() => {
     </header>
 
     <div v-if="showSettings" class="border-b border-white/10 bg-white/5 px-6 py-4">
-      <div class="flex flex-wrap gap-3">
-        <button
-          class="setting-toggle"
-          :class="settings.autoplay ? 'setting-toggle-active' : ''"
-          title="Autoplay on startup"
-          aria-label="Autoplay on startup"
-          @click="toggleAutoplay"
-        >
-          <Repeat :size="iconSizeSm" />
-        </button>
-        <button
-          class="setting-toggle"
-          :class="settings.launchOnLogin ? 'setting-toggle-active' : ''"
-          title="Launch on login"
-          aria-label="Launch on login"
-          @click="toggleLaunchOnLogin"
-        >
-          <LogIn :size="iconSizeSm" />
-        </button>
+      <p class="mb-3 text-sm font-medium text-zinc-300">Settings</p>
+      <div class="space-y-4">
+        <div class="setting-row">
+          <div class="setting-copy">
+            <p class="setting-title">Autoplay on startup</p>
+            <p class="setting-desc">Play your last stream automatically when IceTray opens.</p>
+          </div>
+          <label class="setting-switch">
+            <input
+              type="checkbox"
+              :checked="settings.autoplay"
+              aria-label="Autoplay on startup"
+              @change="setAutoplay(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="setting-switch-track" />
+          </label>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy">
+            <p class="setting-title">Launch on login</p>
+            <p class="setting-desc">Start IceTray in the background when you sign in to your computer.</p>
+          </div>
+          <label class="setting-switch">
+            <input
+              type="checkbox"
+              :checked="settings.launchOnLogin"
+              aria-label="Launch on login"
+              @change="setLaunchOnLogin(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="setting-switch-track" />
+          </label>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy">
+            <p class="setting-title">Start minimised</p>
+            <p class="setting-desc">Keep the player window hidden on startup. Open it from the system tray when you need it.</p>
+          </div>
+          <label class="setting-switch">
+            <input
+              type="checkbox"
+              :checked="settings.launchMinimized"
+              aria-label="Start minimised"
+              @change="setLaunchMinimized(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="setting-switch-track" />
+          </label>
+        </div>
       </div>
     </div>
 
@@ -428,27 +463,76 @@ onUnmounted(() => {
   padding: 0.75rem;
 }
 
-.setting-toggle {
-  display: inline-flex;
+.setting-row {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 0.5rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  background: rgb(0 0 0 / 0.2);
-  padding: 0.625rem;
-  color: rgb(161 161 170);
-  transition: background-color 150ms, color 150ms, border-color 150ms;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.setting-toggle:hover {
-  background: rgb(255 255 255 / 0.08);
-  color: rgb(228 228 231);
+.setting-copy {
+  min-width: 0;
 }
 
-.setting-toggle-active {
-  border-color: rgb(52 211 153 / 0.5);
-  background: rgb(52 211 153 / 0.15);
-  color: rgb(110 231 183);
+.setting-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgb(244 244 245);
+}
+
+.setting-desc {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: rgb(113 113 122);
+}
+
+.setting-switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.setting-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.setting-switch-track {
+  display: block;
+  width: 2.75rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: rgb(63 63 70);
+  transition: background-color 150ms;
+}
+
+.setting-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background: rgb(255 255 255);
+  transition: transform 150ms;
+}
+
+.setting-switch input:checked + .setting-switch-track {
+  background: rgb(52 211 153);
+}
+
+.setting-switch input:checked + .setting-switch-track::after {
+  transform: translateX(1.25rem);
+}
+
+.setting-switch input:focus-visible + .setting-switch-track {
+  outline: 2px solid rgb(52 211 153 / 0.6);
+  outline-offset: 2px;
 }
 
 .card-action-btn {

@@ -42,9 +42,10 @@ type PlaybackState struct {
 
 // SettingsView exposes app settings to the frontend.
 type SettingsView struct {
-	Autoplay      bool `json:"autoplay"`
-	LaunchOnLogin bool `json:"launchOnLogin"`
-	Volume        int  `json:"volume"`
+	Autoplay         bool `json:"autoplay"`
+	LaunchOnLogin    bool `json:"launchOnLogin"`
+	LaunchMinimized  bool `json:"launchMinimized"`
+	Volume           int  `json:"volume"`
 }
 
 // App is the Wails application binding layer.
@@ -306,9 +307,10 @@ func (a *App) SetVolume(vol int) error {
 // GetSettings returns app settings.
 func (a *App) GetSettings() SettingsView {
 	return SettingsView{
-		Autoplay:      a.cfg.GetAutoplay(),
-		LaunchOnLogin: a.cfg.GetLaunchOnLogin(),
-		Volume:        a.cfg.GetVolume(),
+		Autoplay:         a.cfg.GetAutoplay(),
+		LaunchOnLogin:    a.cfg.GetLaunchOnLogin(),
+		LaunchMinimized:  a.cfg.GetLaunchMinimized(),
+		Volume:           a.cfg.GetVolume(),
 	}
 }
 
@@ -329,6 +331,11 @@ func (a *App) SetLaunchOnLogin(enabled bool) error {
 		}
 	}
 	return a.cfg.SetLaunchOnLogin(enabled)
+}
+
+// SetLaunchMinimized toggles whether the player window starts hidden (desktop tray only).
+func (a *App) SetLaunchMinimized(enabled bool) error {
+	return a.cfg.SetLaunchMinimized(enabled)
 }
 
 // GetNowPlaying returns the latest metadata snapshot.

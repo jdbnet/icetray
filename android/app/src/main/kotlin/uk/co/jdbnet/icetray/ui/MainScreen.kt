@@ -35,11 +35,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -188,8 +186,8 @@ fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
                 SettingsRow(
                     autoplay = settings.autoplay,
                     launchOnLogin = settings.launchOnLogin,
-                    onToggleAutoplay = { viewModel.setAutoplay(!settings.autoplay) },
-                    onToggleLaunchOnLogin = { viewModel.setLaunchOnLogin(!settings.launchOnLogin) },
+                    onAutoplayChange = viewModel::setAutoplay,
+                    onLaunchOnLoginChange = viewModel::setLaunchOnLogin,
                 )
             }
 
@@ -299,23 +297,59 @@ private fun Header(showSettings: Boolean, onToggleSettings: () -> Unit, onAdd: (
 private fun SettingsRow(
     autoplay: Boolean,
     launchOnLogin: Boolean,
-    onToggleAutoplay: () -> Unit,
-    onToggleLaunchOnLogin: () -> Unit,
+    onAutoplayChange: (Boolean) -> Unit,
+    onLaunchOnLoginChange: (Boolean) -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Surface)
             .border(width = 1.dp, color = Border)
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        SettingToggle(active = autoplay, onClick = onToggleAutoplay, description = "Autoplay on startup") {
-            Icon(Icons.Default.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
+        Text("Settings", style = MaterialTheme.typography.titleSmall, color = Zinc300)
+        SettingSwitchRow(
+            title = "Autoplay on startup",
+            description = "Play your last stream automatically when IceTray opens.",
+            checked = autoplay,
+            onCheckedChange = onAutoplayChange,
+        )
+        SettingSwitchRow(
+            title = "Resume on boot",
+            description = "Start playback for your last stream when the device boots.",
+            checked = launchOnLogin,
+            onCheckedChange = onLaunchOnLoginChange,
+        )
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = Zinc100)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = Zinc500)
         }
-        SettingToggle(active = launchOnLogin, onClick = onToggleLaunchOnLogin, description = "Resume on boot") {
-            Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
-        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
     }
 }
 
@@ -529,24 +563,6 @@ private fun CircleIconButton(
             .border(1.dp, borderColor, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) {
-        content()
-    }
-}
-
-@Composable
-private fun SettingToggle(
-    active: Boolean,
-    onClick: () -> Unit,
-    description: String,
-    content: @Composable () -> Unit,
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(44.dp)
-            .background(if (active) Emerald.copy(alpha = 0.15f) else Color(0x33000000), RoundedCornerShape(8.dp))
-            .border(1.dp, if (active) Emerald.copy(alpha = 0.5f) else Border, RoundedCornerShape(8.dp)),
     ) {
         content()
     }

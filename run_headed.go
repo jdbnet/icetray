@@ -34,6 +34,11 @@ func runHeaded(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm 
 
 	background := options.RGBA{R: 18, G: 18, B: 20, A: 255}
 
+	startHidden := false
+	if runtime.GOOS == "windows" || runtime.GOOS == "linux" {
+		startHidden = cfg.GetLaunchMinimized()
+	}
+
 	err := wails.Run(&options.App{
 		Title:             "IceTray",
 		Width:             1100,
@@ -41,6 +46,7 @@ func runHeaded(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm 
 		MinWidth:          800,
 		MinHeight:         560,
 		HideWindowOnClose: true,
+		StartHidden:       startHidden,
 		BackgroundColour:  &background,
 		AssetServer: &assetserver.Options{
 			Assets: frontendAssets,
