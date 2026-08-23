@@ -16,5 +16,8 @@
     "productVersion": "1.0.0",
     "copyright": "Copyright JDB-NET",
     "comments": "Internet radio player for Icecast streams"
+  },
+  "preBuildHooks": {
+    "*/*": "bash ../../scripts/stage-wails-icons.sh"
   }
 }

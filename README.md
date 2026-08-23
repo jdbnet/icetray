@@ -1,6 +1,11 @@
-# IceTray
+<div align="center">
+  <img src="assets/icon.png" alt="Icetray" width="64" />
 
-IceTray is a lightweight internet radio player for Icecast streams. Desktop builds run in the system tray with a Wails player UI. Android uses the same player layout with standard lock-screen and notification media controls.
+  # IceTray
+
+  IceTray is a lightweight internet radio player for Icecast streams. Desktop builds run in the system tray with a Wails player UI. Android uses the same player layout with standard lock-screen and notification media controls.
+
+</div>
 
 ## Features
 
