@@ -52,6 +52,7 @@ type Player struct {
 	audioActive    bool
 	activeBuf      StreamBuffer
 	activeCancel   chan struct{}
+	sourceGen      uint64
 	ctrl           *beep.Ctrl
 	volumeEffect   *effects.Volume
 	stateListeners []func()
@@ -115,44 +116,48 @@ func (p *Player) Play(streamURL string) error {
 // SetSource starts playback from a new buffer source.
 func (p *Player) SetSource(buf StreamBuffer) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if !p.isRunning {
-		// If the player is not running, ignore the source
+		p.mu.Unlock()
 		return
 	}
 
-	p.stopActiveStream()
-
+	p.stopActiveStreamLocked()
+	gen := p.sourceGen
 	p.activeBuf = buf
-	p.activeCancel = make(chan struct{})
-	go p.playSource(buf, p.activeCancel)
+	cancel := make(chan struct{})
+	p.activeCancel = cancel
+	p.mu.Unlock()
+
+	p.clearSpeaker()
+	go p.playSource(buf, cancel, gen)
 }
 
 // ClearSource stops any active playback stream but keeps running state.
 func (p *Player) ClearSource() {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.stopActiveStream()
+	p.stopActiveStreamLocked()
+	p.mu.Unlock()
+	p.clearSpeaker()
 }
 
-// stopActiveStream stops the active streamer and cancels the goroutine. Must be called with p.mu locked.
+func (p *Player) clearSpeaker() {
+	speaker.Lock()
+	speaker.Clear()
+	speaker.Unlock()
+}
+
+// stopActiveStreamLocked stops the active streamer. Must be called with p.mu locked.
 // The stream buffer is owned by the supervisor; do not close it here.
-func (p *Player) stopActiveStream() {
+// Do not call speaker APIs here; release p.mu first to avoid deadlocks with the audio thread.
+func (p *Player) stopActiveStreamLocked() {
+	p.sourceGen++
 	if p.activeCancel != nil {
 		close(p.activeCancel)
 		p.activeCancel = nil
 	}
 	p.activeBuf = nil
-
-	speaker.Lock()
-	speaker.Clear()
-	if p.ctrl != nil {
-		p.ctrl.Streamer = nil
-		p.ctrl = nil
-	}
+	p.ctrl = nil
 	p.volumeEffect = nil
-	speaker.Unlock()
 
 	if p.audioActive {
 		p.audioActive = false
@@ -161,7 +166,7 @@ func (p *Player) stopActiveStream() {
 }
 
 // playSource decodes and plays the audio source.
-func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
+func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) {
 	targetBytes := preBufferTargetBytes
 	minBytes := preBufferMinBytes
 	logger.Log(fmt.Sprintf("playSource: waiting for buffer to fill to %d bytes...", targetBytes))
@@ -212,6 +217,13 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 
 	logger.Log(fmt.Sprintf("playSource: buffer filled (%d bytes), decoding...", buf.AvailableData()))
 
+	p.mu.RLock()
+	stale := p.sourceGen != gen || !p.isRunning
+	p.mu.RUnlock()
+	if stale {
+		return
+	}
+
 	// 2. Decode the MP3 stream
 	streamer, format, err := mp3.Decode(buf)
 	if err != nil {
@@ -246,6 +258,10 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}) {
 
 	// 5. Wrap in Ctrl to support Pause/Resume
 	p.mu.Lock()
+	if p.sourceGen != gen || !p.isRunning {
+		p.mu.Unlock()
+		return
+	}
 	isPaused := p.isPaused
 	ctrl := &beep.Ctrl{
 		Streamer: output,
@@ -320,15 +336,17 @@ func (p *Player) Resume() error {
 // Stop stops the playback and cleans up active stream.
 func (p *Player) Stop() error {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if !p.isRunning {
+		p.mu.Unlock()
 		return nil
 	}
 
-	p.stopActiveStream()
+	p.stopActiveStreamLocked()
 	p.isRunning = false
 	p.isPaused = false
+	p.mu.Unlock()
+
+	p.clearSpeaker()
 	logger.Log("Stop: playback stopped")
 	go p.notifyStateChange()
 	return nil

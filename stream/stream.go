@@ -264,6 +264,9 @@ func (sr *StreamReader) Stop() {
 	default:
 		close(sr.stopChan)
 	}
+	if sr.buffer != nil {
+		sr.buffer.Close()
+	}
 }
 
 // GetBuffer returns the underlying ring buffer.
@@ -357,6 +360,8 @@ func (s *Supervisor) attemptConnection(url string, session uint64) error {
 		if s.session.Load() != session {
 			return
 		}
+		// SetSource releases the player lock before touching the speaker so we
+		// never block HTTP reads while waiting on the audio thread.
 		s.player.SetSource(reader.GetBuffer())
 	}
 	s.mu.Lock()

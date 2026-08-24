@@ -231,8 +231,10 @@ func (a *App) PlayStream(id string) error {
 
 func (a *App) stopPlaybackLocked() {
 	a.stopMetadataPoller()
-	a.supervisor.Stop()
+	// Stop audio output before tearing down the network reader so the speaker
+	// is not left waiting on an empty ring buffer (fab12f6 reversed this order).
 	a.player.Stop()
+	a.supervisor.Stop()
 }
 
 func (a *App) playStreamLocked(id string) error {
@@ -466,9 +468,9 @@ func (a *App) TrayStop() {
 
 // Shutdown cleans up on application exit.
 func (a *App) Shutdown() {
-	a.stopMetadataPoller()
-	a.supervisor.Stop()
-	_ = a.player.Stop()
+	a.playbackMu.Lock()
+	defer a.playbackMu.Unlock()
+	a.stopPlaybackLocked()
 	logger.Log("Application shutdown")
 }
 
