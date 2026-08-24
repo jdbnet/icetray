@@ -141,9 +141,8 @@ func (p *Player) ClearSource() {
 }
 
 func (p *Player) clearSpeaker() {
-	speaker.Lock()
+	// speaker.Clear locks internally; do not wrap with speaker.Lock (self-deadlock).
 	speaker.Clear()
-	speaker.Unlock()
 }
 
 // stopActiveStreamLocked stops the active streamer. Must be called with p.mu locked.
@@ -224,8 +223,14 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) 
 		return
 	}
 
-	// 2. Decode the MP3 stream
-	streamer, format, err := mp3.Decode(buf)
+	synced, err := newSyncedMP3Reader(buf)
+	if err != nil {
+		logger.LogError("playSource: failed to find MP3 frame sync", err)
+		return
+	}
+
+	// Decode the MP3 stream
+	streamer, format, err := mp3.Decode(io.NopCloser(synced))
 	if err != nil {
 		logger.LogError("playSource: failed to decode stream", err)
 		return
@@ -271,10 +276,8 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) 
 	p.volumeEffect = volumeEffect
 	p.mu.Unlock()
 
-	// 6. Play on speaker
-	speaker.Lock()
+	// 6. Play on speaker (Play locks internally; do not wrap with speaker.Lock).
 	speaker.Play(ctrl)
-	speaker.Unlock()
 	logger.Log("playSource: speaker playback started")
 
 	p.mu.Lock()
