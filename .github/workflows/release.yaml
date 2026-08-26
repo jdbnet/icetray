@@ -111,8 +111,9 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Build signed Android APK
+      - name: Build signed Android APK and AAB
         env:
+          VERSION: ${{ needs.version.outputs.version }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -122,7 +123,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dist-android
-          path: dist/icetray-android.apk
+          path: |
+            dist/icetray-android.apk
+            dist/icetray-android.aab
 
   publish:
     needs: [version, build-amd64, build-arm64, build-android]
@@ -178,6 +181,7 @@ jobs:
             dist/icetray-windows-amd64-setup.exe
             dist/icetray-windows-arm64-setup.exe
             dist/icetray-android.apk
+            dist/icetray-android.aab
             dist/icetray_*_*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -21,9 +21,16 @@ elif [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] || [ -n "${ANDROID_KEYSTORE_PATH:-}" 
   echo "Android signing secrets were provided but the keystore file is missing or invalid." >&2
   exit 1
 else
-  echo "ANDROID signing secrets not configured. Building unsigned release APK." >&2
+  echo "ANDROID signing secrets not configured. Building unsigned release APK/AAB." >&2
   echo "Set ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD for signed builds." >&2
+  echo "Google Play requires a signed AAB; unsigned bundles cannot be uploaded." >&2
 fi
+
+if [ -z "${VERSION:-}" ] && [ -f "${REPO_ROOT}/VERSION" ]; then
+  VERSION="$(tr -d '[:space:]' < "${REPO_ROOT}/VERSION")"
+  export VERSION
+fi
+echo "==> Android version ${VERSION:-unknown}"
 
 cd android
 
@@ -36,7 +43,7 @@ if [ ! -x "./gradlew" ]; then
   fi
 fi
 
-./gradlew :app:assembleRelease :app:testDebugUnitTest --no-daemon
+./gradlew :app:assembleRelease :app:bundleRelease :app:testDebugUnitTest --no-daemon
 
 APK="app/build/outputs/apk/release/app-release.apk"
 if [ ! -f "${APK}" ]; then
@@ -48,6 +55,13 @@ if [ ! -f "${APK}" ]; then
   exit 1
 fi
 
+AAB="app/build/outputs/bundle/release/app-release.aab"
+if [ ! -f "${AAB}" ]; then
+  echo "Release AAB not found." >&2
+  exit 1
+fi
+
 cp "${APK}" "../${OUTDIR}/icetray-android.apk"
+cp "${AAB}" "../${OUTDIR}/icetray-android.aab"
 echo "==> Android build complete:"
-ls -lh "../${OUTDIR}/icetray-android.apk"
+ls -lh "../${OUTDIR}/icetray-android.apk" "../${OUTDIR}/icetray-android.aab"

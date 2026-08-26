@@ -13,8 +13,9 @@ android {
         applicationId = "uk.co.jdbnet.icetray"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        val (code, name) = resolveAndroidVersion()
+        versionCode = code
+        versionName = name
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -94,4 +95,18 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+fun resolveAndroidVersion(): Pair<Int, String> {
+    val raw = System.getenv("VERSION")?.trim().orEmpty().ifEmpty {
+        val versionFile = rootProject.layout.projectDirectory.asFile.resolve("../VERSION")
+        if (versionFile.isFile) versionFile.readText().trim() else ""
+    }.removePrefix("v").ifEmpty { "1.0.0" }
+    val core = raw.split("-", limit = 2)[0]
+    val parts = core.split(".")
+    val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
+    val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+    val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+    val code = (major * 1_000_000 + minor * 1_000 + patch).coerceAtLeast(1)
+    return code to raw
 }
