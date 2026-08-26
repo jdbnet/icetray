@@ -5,4 +5,6 @@
     <string name="pause">Pause</string>
     <string name="play_pause">Play/Pause</string>
     <string name="stop">Stop</string>
+    <string name="notifications_denied">Allow notifications so playback controls appear in the shade and on the lock screen.</string>
+    <string name="notifications_settings">Settings</string>
 </resources>

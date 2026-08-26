@@ -4,11 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media3.common.AudioAttributes
@@ -20,7 +20,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionResult
@@ -42,7 +41,6 @@ import uk.co.jdbnet.icetray.metadata.MetadataFetcher
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
-    private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
@@ -79,7 +77,7 @@ class PlaybackService : MediaSessionService() {
                 stream?.let { playStream(it) }
                 return START_STICKY
             }
-            else -> return START_NOT_STICKY
+            else -> return START_STICKY
         }
     }
 
@@ -88,9 +86,10 @@ class PlaybackService : MediaSessionService() {
         return mediaSession
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        stopPlayback()
-        super.onTaskRemoved(rootIntent)
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        debugLog("onUpdateNotification startInForegroundRequired=$startInForegroundRequired")
+        super.onUpdateNotification(session, startInForegroundRequired)
+        getSystemService(NotificationManager::class.java)?.cancel(PLACEHOLDER_NOTIFICATION_ID)
     }
 
     override fun onDestroy() {
@@ -124,7 +123,6 @@ class PlaybackService : MediaSessionService() {
         exoPlayer.playWhenReady = true
         startMetadataPolling(stream.url, stream)
         publishState()
-        requestMediaNotificationUpdate()
     }
 
     fun pause() {
@@ -153,11 +151,6 @@ class PlaybackService : MediaSessionService() {
         publishState()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
-    }
-
-    private fun requestMediaNotificationUpdate() {
-        val session = mediaSession ?: return
-        mainHandler.post { onUpdateNotification(session, /* startInForegroundRequired= */ true) }
     }
 
     private fun ensureNotificationChannel() {
@@ -200,10 +193,11 @@ class PlaybackService : MediaSessionService() {
             .build()
         ServiceCompat.startForeground(
             this,
-            DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID,
+            PLACEHOLDER_NOTIFICATION_ID,
             notification,
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
         )
+        debugLog("placeholder foreground started id=$PLACEHOLDER_NOTIFICATION_ID")
     }
 
     private fun ensurePlayerInitialized() {
@@ -221,6 +215,8 @@ class PlaybackService : MediaSessionService() {
             )
             .setCallback(sessionCallback())
             .build()
+        addSession(mediaSession!!)
+        debugLog("media session created and added id=${mediaSession?.id}")
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 publishState()
@@ -291,7 +287,7 @@ class PlaybackService : MediaSessionService() {
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
     }
 
@@ -374,8 +370,16 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    private fun debugLog(message: String) {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            Log.i(TAG, message)
+        }
+    }
+
     companion object {
+        private const val TAG = "IceTrayPlayback"
         private const val NOTIFICATION_CHANNEL_ID = "icetray_playback"
+        private const val PLACEHOLDER_NOTIFICATION_ID = 9999
 
         const val ACTION_START = "uk.co.jdbnet.icetray.action.START"
         const val ACTION_STOP = "uk.co.jdbnet.icetray.action.STOP"
