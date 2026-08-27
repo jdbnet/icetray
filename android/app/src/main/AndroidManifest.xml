@@ -39,6 +39,7 @@
             </intent-filter>
         </service>
 
+        <!-- BOOT_COMPLETED must not start mediaPlayback foreground services on Android 15+. -->
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"

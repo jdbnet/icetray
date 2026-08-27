@@ -358,7 +358,7 @@ private fun SettingsRow(
         )
         SettingSwitchRow(
             title = "Resume on boot",
-            description = "Start playback for your last stream when the device boots.",
+            description = "After the device starts, show a notification you can tap to resume your last stream.",
             checked = launchOnLogin,
             onCheckedChange = onLaunchOnLoginChange,
         )
