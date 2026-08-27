@@ -36,7 +36,7 @@ cd android
 
 if [ ! -x "./gradlew" ]; then
   if command -v gradle >/dev/null 2>&1; then
-    gradle wrapper --gradle-version 8.11.1
+    gradle wrapper --gradle-version 9.1.0
   else
     echo "Gradle wrapper missing and gradle not installed." >&2
     exit 1
