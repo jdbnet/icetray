@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.Uri
 import android.os.Build
 import android.util.Log
@@ -47,9 +49,11 @@ class PlaybackService : MediaSessionService() {
     private val metadataFetcher = MetadataFetcher()
     private var metadataJob: Job? = null
     private var reconnectJob: Job? = null
+    private var stallJob: Job? = null
     private var currentStream: StreamView? = null
-    private var currentStreamUrl: String = ""
     private var reconnectAttempt = 0
+    private var retryingPlayback = false
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -62,6 +66,7 @@ class PlaybackService : MediaSessionService() {
         mediaNotificationProvider.setSmallIcon(R.drawable.ic_notification)
         setMediaNotificationProvider(mediaNotificationProvider)
         PlaybackController.attachService(this)
+        registerNetworkCallback()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -95,6 +100,8 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         metadataJob?.cancel()
         reconnectJob?.cancel()
+        stallJob?.cancel()
+        unregisterNetworkCallback()
         mediaSession?.release()
         mediaSession = null
         player?.release()
@@ -107,40 +114,42 @@ class PlaybackService : MediaSessionService() {
     fun playStream(stream: StreamView) {
         ensurePlayerInitialized()
         currentStream = stream
-        currentStreamUrl = stream.url
         reconnectAttempt = 0
         reconnectJob?.cancel()
-        val exoPlayer = player ?: return
-        exoPlayer.setMediaItem(
-            MediaItem.Builder()
-                .setUri(stream.url)
-                .setMediaId(stream.id)
-                .setMediaMetadata(streamMetadata(stream.name, stream.name, stream.imagePath))
-                .build(),
-        )
-        exoPlayer.volume = 1f
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
+        reconnectJob = null
+        retryCurrentStream(stream)
         startMetadataPolling(stream.url, stream)
+        watchForStall()
         publishState()
     }
 
     fun pause() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        stallJob?.cancel()
         player?.pause()
         publishState()
     }
 
     fun resume() {
-        player?.play()
+        val exoPlayer = player
+        val stream = currentStream
+        if (exoPlayer != null && stream != null && ReconnectPolicy.shouldRetryOnResume(exoPlayer.playbackState)) {
+            retryCurrentStream(stream)
+        } else {
+            exoPlayer?.play()
+        }
+        watchForStall()
         publishState()
     }
 
     fun stopPlayback() {
         reconnectJob?.cancel()
         reconnectJob = null
+        stallJob?.cancel()
+        stallJob = null
         stopMetadataPolling()
         currentStream = null
-        currentStreamUrl = ""
         reconnectAttempt = 0
         player?.let { exoPlayer ->
             exoPlayer.playWhenReady = false
@@ -219,15 +228,37 @@ class PlaybackService : MediaSessionService() {
         debugLog("media session created and added id=${mediaSession?.id}")
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    reconnectAttempt = 0
+                }
                 publishState()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 publishState()
+                if (retryingPlayback) return
+                val exo = player ?: return
+                if (ReconnectPolicy.shouldReconnectAfterState(
+                        currentStream != null,
+                        exo.playWhenReady,
+                        playbackState,
+                    )
+                ) {
+                    debugLog("stream ended, scheduling reconnect")
+                    scheduleReconnect()
+                }
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                scheduleReconnect()
+                Log.w(TAG, "player error ${error.errorCodeName}", error)
+                val exo = player
+                if (ReconnectPolicy.shouldReconnectAfterError(
+                        currentStream != null,
+                        exo?.playWhenReady != false,
+                    )
+                ) {
+                    scheduleReconnect()
+                }
             }
         })
         PlaybackController.onPlayerReady(exoPlayer, mediaSession!!)
@@ -276,6 +307,8 @@ class PlaybackService : MediaSessionService() {
         val dataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("IceTray-Android")
             .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(10_000)
+            .setReadTimeoutMs(15_000)
         val mediaSourceFactory = DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory)
         return ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -346,28 +379,107 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun updateSessionMetadata(title: String, artist: String, imagePath: String?) {
-        val metadata = streamMetadata(title, artist, imagePath)
-        player?.let { exoPlayer ->
-            val current = exoPlayer.currentMediaItem ?: return
-            exoPlayer.replaceMediaItem(
-                exoPlayer.currentMediaItemIndex,
-                current.buildUpon().setMediaMetadata(metadata).build(),
+        // Playlist metadata updates the session without replacing the MediaItem, which would
+        // tear down the live HTTP connection on Icecast streams.
+        player?.playlistMetadata = streamMetadata(title, artist, imagePath)
+    }
+
+    private fun retryCurrentStream(stream: StreamView) {
+        val exoPlayer = player ?: return
+        retryingPlayback = true
+        try {
+            exoPlayer.stop()
+            exoPlayer.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(stream.url)
+                    .setMediaId(stream.id)
+                    .setMediaMetadata(streamMetadata(stream.name, stream.name, stream.imagePath))
+                    .build(),
             )
+            exoPlayer.volume = 1f
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
+        } finally {
+            retryingPlayback = false
         }
     }
 
-    private fun scheduleReconnect() {
-        if (currentStreamUrl.isBlank()) return
+    private fun scheduleReconnect(immediate: Boolean = false) {
+        if (currentStream == null) return
+        val exoPlayer = player
+        if (exoPlayer != null && !exoPlayer.playWhenReady) return
+        if (!immediate && reconnectJob?.isActive == true) return
         reconnectJob?.cancel()
         reconnectJob = serviceScope.launch {
-            val delayMs = minOf(30_000L, 1_000L shl minOf(reconnectAttempt, 5))
-            delay(delayMs)
+            val delayMs = if (immediate) 0L else ReconnectPolicy.backoffMs(reconnectAttempt)
+            if (delayMs > 0) delay(delayMs)
+            if (!isActive) return@launch
             reconnectAttempt++
-            val stream = currentStream ?: return@launch
             withContext(Dispatchers.Main) {
-                playStream(stream)
+                if (!isActive) return@withContext
+                val current = currentStream ?: return@withContext
+                val exo = player
+                if (exo != null && !exo.playWhenReady) return@withContext
+                debugLog("retrying stream ${current.name} attempt=$reconnectAttempt")
+                retryCurrentStream(current)
             }
         }
+    }
+
+    private fun watchForStall() {
+        stallJob?.cancel()
+        stallJob = serviceScope.launch {
+            while (isActive) {
+                delay(ReconnectPolicy.STALL_TIMEOUT_MS)
+                withContext(Dispatchers.Main) {
+                    val exo = player ?: return@withContext
+                    if (!ReconnectPolicy.shouldReconnectAfterStall(
+                            currentStream != null,
+                            exo.playWhenReady,
+                            exo.isPlaying,
+                            exo.playbackState,
+                            reconnectJob?.isActive == true,
+                        )
+                    ) {
+                        return@withContext
+                    }
+                    debugLog("playback stalled state=${exo.playbackState}, reconnecting")
+                    scheduleReconnect()
+                }
+            }
+        }
+    }
+
+    private fun registerNetworkCallback() {
+        if (networkCallback != null) return
+        val connectivity = getSystemService(ConnectivityManager::class.java) ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                serviceScope.launch {
+                    withContext(Dispatchers.Main) {
+                        val exo = player ?: return@withContext
+                        if (!ReconnectPolicy.shouldReconnectOnNetworkAvailable(
+                                currentStream != null,
+                                exo.playWhenReady,
+                                exo.isPlaying,
+                            )
+                        ) {
+                            return@withContext
+                        }
+                        debugLog("network available, retrying stream")
+                        scheduleReconnect(immediate = true)
+                    }
+                }
+            }
+        }
+        networkCallback = callback
+        connectivity.registerDefaultNetworkCallback(callback)
+    }
+
+    private fun unregisterNetworkCallback() {
+        val callback = networkCallback ?: return
+        networkCallback = null
+        getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(callback)
     }
 
     private fun debugLog(message: String) {
