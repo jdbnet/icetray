@@ -18,6 +18,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 export PATH="$(go env GOPATH)/bin:${PATH}"
 
 bash scripts/set-version.sh
+export VERSION="${VERSION:-$(jq -r '.info.productVersion' wails.json)}"
 
 echo "==> Building Linux headed binary (Wails)..."
 wails build -tags webkit2_41 -clean -o icetray-linux-amd64
@@ -33,7 +34,11 @@ install -m 0755 build/bin/icetray-arm64.exe "${OUTDIR}/icetray-windows-arm64.exe
 install -m 0755 build/bin/icetray-amd64-installer.exe "${OUTDIR}/icetray-windows-amd64-setup.exe"
 install -m 0755 build/bin/icetray-arm64-installer.exe "${OUTDIR}/icetray-windows-arm64-setup.exe"
 
+echo "==> Building Debian package (amd64)..."
+bash scripts/ci-deb.sh amd64
+
 echo "==> amd64 build complete:"
 ls -lh "${OUTDIR}/"icetray-linux-amd64 "${OUTDIR}/"icetray-headless-linux-amd64 \
   "${OUTDIR}/"icetray-windows-amd64.exe "${OUTDIR}/"icetray-windows-arm64.exe \
-  "${OUTDIR}/"icetray-windows-amd64-setup.exe "${OUTDIR}/"icetray-windows-arm64-setup.exe
+  "${OUTDIR}/"icetray-windows-amd64-setup.exe "${OUTDIR}/"icetray-windows-arm64-setup.exe \
+  "${OUTDIR}/"icetray_"${VERSION}"_amd64.deb

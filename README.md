@@ -29,6 +29,7 @@ Get the latest build from [GitHub Releases](https://github.com/jdbnet/icetray/re
 | Windows | `icetray-windows-amd64.exe`, `icetray-windows-arm64.exe` |
 | Windows (installer) | `icetray-windows-amd64-setup.exe`, `icetray-windows-arm64-setup.exe` |
 | Android | `icetray-android.apk` |
+| Debian/Ubuntu | `icetray_*_amd64.deb`, `icetray_*_arm64.deb` |
 
 ### APT (Debian/Ubuntu)
 

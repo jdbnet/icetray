@@ -8,15 +8,23 @@ if [ -z "${VERSION:-}" ]; then
   exit 1
 fi
 
+OUTDIR="${OUTDIR:-dist}"
+mkdir -p "${OUTDIR}"
+
 if ! command -v nfpm >/dev/null 2>&1; then
   go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
   export PATH="$(go env GOPATH)/bin:${PATH}"
 fi
 
-mkdir -p dist
+if [ "$#" -gt 0 ]; then
+  arches=("$@")
+else
+  arches=(amd64 arm64)
+fi
 
-for arch in amd64 arm64; do
-  binary="dist/icetray-linux-${arch}"
+packaged=0
+for arch in "${arches[@]}"; do
+  binary="${OUTDIR}/icetray-linux-${arch}"
   if [ ! -f "${binary}" ]; then
     echo "Missing ${binary}" >&2
     exit 1
@@ -27,10 +35,16 @@ for arch in amd64 arm64; do
 
   NFPM_VERSION="${VERSION}" NFPM_ARCH="${arch}" nfpm package \
     -f nfpm/icetray.yaml \
-    -t "dist/icetray_${VERSION}_${arch}.deb"
+    -t "${OUTDIR}/icetray_${VERSION}_${arch}.deb"
 
   rm -rf dist/nfpm-staging
+  packaged=$((packaged + 1))
 done
 
+if [ "${packaged}" -eq 0 ]; then
+  echo "No Debian packages were produced" >&2
+  exit 1
+fi
+
 echo "==> Debian packages:"
-ls -lh dist/icetray_"${VERSION}"_*.deb
+ls -lh "${OUTDIR}"/icetray_"${VERSION}"_*.deb

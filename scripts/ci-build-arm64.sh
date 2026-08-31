@@ -17,6 +17,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 export PATH="$(go env GOPATH)/bin:${PATH}"
 
 bash scripts/set-version.sh
+export VERSION="${VERSION:-$(jq -r '.info.productVersion' wails.json)}"
 
 echo "==> Building Linux headed binary (Wails)..."
 wails build -tags webkit2_41 -clean -o icetray-linux-arm64
@@ -25,5 +26,9 @@ install -m 0755 build/bin/icetray-linux-arm64 "${OUTDIR}/icetray-linux-arm64"
 echo "==> Building Linux headless binary..."
 GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -buildvcs=false -tags headless -o "${OUTDIR}/icetray-headless-linux-arm64" .
 
+echo "==> Building Debian package (arm64)..."
+bash scripts/ci-deb.sh arm64
+
 echo "==> arm64 build complete:"
-ls -lh "${OUTDIR}/"icetray-linux-arm64 "${OUTDIR}/"icetray-headless-linux-arm64
+ls -lh "${OUTDIR}/"icetray-linux-arm64 "${OUTDIR}/"icetray-headless-linux-arm64 \
+  "${OUTDIR}/"icetray_"${VERSION}"_arm64.deb

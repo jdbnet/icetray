@@ -60,6 +60,7 @@ jobs:
             dist/icetray-windows-arm64.exe
             dist/icetray-windows-amd64-setup.exe
             dist/icetray-windows-arm64-setup.exe
+            dist/icetray_*_amd64.deb
 
   build-arm64:
     needs: version
@@ -81,6 +82,8 @@ jobs:
           node-version: "20"
 
       - name: Build arm64 binaries
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: bash scripts/ci-build-arm64.sh
 
       - uses: actions/upload-artifact@v4
@@ -89,6 +92,7 @@ jobs:
           path: |
             dist/icetray-linux-arm64
             dist/icetray-headless-linux-arm64
+            dist/icetray_*_arm64.deb
 
   build-android:
     needs: version
@@ -132,16 +136,6 @@ jobs:
     if: needs.version.outputs.version != ''
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: v${{ needs.version.outputs.version }}
-          fetch-depth: 0
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -160,11 +154,6 @@ jobs:
           rm -rf dist/dist-*
           ls -lh dist/
 
-      - name: Build Debian packages
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-        run: bash scripts/ci-deb.sh
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -182,7 +171,8 @@ jobs:
             dist/icetray-windows-arm64-setup.exe
             dist/icetray-android.apk
             dist/icetray-android.aab
-            dist/icetray_*_*.deb
+            dist/icetray_*_amd64.deb
+            dist/icetray_*_arm64.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
