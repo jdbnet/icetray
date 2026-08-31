@@ -100,7 +100,7 @@ Or use `./build.sh` for local desktop builds.
 Requirements:
 
 - JDK 17+
-- Android SDK (API 35)
+- Android SDK (API 36)
 
 ```bash
 bash scripts/ci-build-android.sh

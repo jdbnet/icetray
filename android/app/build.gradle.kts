@@ -11,7 +11,7 @@ android {
     defaultConfig {
         applicationId = "uk.co.jdbnet.icetray"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         val (code, name) = resolveAndroidVersion()
         versionCode = code
         versionName = name
