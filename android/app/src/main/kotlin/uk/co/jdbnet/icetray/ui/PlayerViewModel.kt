@@ -137,6 +137,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun moveStream(fromIndex: Int, toIndex: Int) {
+        if (fromIndex == toIndex) return
+        val current = _streams.value
+        if (fromIndex !in current.indices || toIndex !in current.indices) return
+        val next = current.toMutableList()
+        val item = next.removeAt(fromIndex)
+        next.add(toIndex, item)
+        _streams.value = next
+    }
+
+    fun persistStreamOrder() {
+        viewModelScope.launch {
+            runCatching {
+                configRepository.reorderStreams(_streams.value.map { it.id })
+            }.onFailure {
+                refreshStreams()
+            }
+        }
+    }
+
     fun removeStream(id: String) {
         viewModelScope.launch {
             val removed = configRepository.removeStream(id)

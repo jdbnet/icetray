@@ -14,6 +14,10 @@ export function RemoveStream(id) {
   return window.go.main.App.RemoveStream(id)
 }
 
+export function ReorderStreams(ids) {
+  return window.go.main.App.ReorderStreams(ids)
+}
+
 export function PickStreamImage(id) {
   return window.go.main.App.PickStreamImage(id)
 }

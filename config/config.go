@@ -159,6 +159,41 @@ func (c *Config) SetStreamImage(id, image string) error {
 	return fmt.Errorf("stream not found: %s", id)
 }
 
+// ReorderStreams rewrites the stream list to match the given IDs and saves.
+func (c *Config) ReorderStreams(ids []string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(ids) != len(c.Streams) {
+		return fmt.Errorf("stream order length mismatch")
+	}
+
+	byID := make(map[string]Stream, len(c.Streams))
+	for _, s := range c.Streams {
+		if _, exists := byID[s.ID]; exists {
+			return fmt.Errorf("duplicate stream id: %s", s.ID)
+		}
+		byID[s.ID] = s
+	}
+
+	next := make([]Stream, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		s, ok := byID[id]
+		if !ok {
+			return fmt.Errorf("stream not found: %s", id)
+		}
+		if _, dup := seen[id]; dup {
+			return fmt.Errorf("duplicate stream id: %s", id)
+		}
+		seen[id] = struct{}{}
+		next = append(next, s)
+	}
+
+	c.Streams = next
+	return c.saveLocked()
+}
+
 // RemoveStreamByID removes a stream by ID and saves the config.
 func (c *Config) RemoveStreamByID(id string) (Stream, error) {
 	c.mu.Lock()

@@ -26,6 +26,7 @@ import {
   PickStreamImage,
   PlayStream,
   RemoveStream,
+  ReorderStreams,
   Resume,
   SetAutoplay,
   SetLaunchMinimized,
@@ -53,11 +54,13 @@ const nowPlaying = ref<NowPlaying>({ station: '', title: '' })
 
 const showModal = ref(false)
 const showSettings = ref(false)
+const editMode = ref(false)
 const editing = ref<StreamView | null>(null)
 const formName = ref('')
 const formURL = ref('')
 const formError = ref('')
 const loading = ref(true)
+const dragFromId = ref<string | null>(null)
 
 const currentStream = computed(() => streams.value.find((s) => s.id === playback.value.streamId))
 const displayTitle = computed(() => nowPlaying.value.title || currentStream.value?.name || 'Nothing playing')
@@ -127,6 +130,55 @@ async function deleteStream(stream: StreamView) {
   await RemoveStream(stream.id)
   await refreshStreams()
   await refreshPlayback()
+  if (streams.value.length === 0) {
+    editMode.value = false
+  }
+}
+
+function toggleEditMode() {
+  if (streams.value.length === 0) return
+  editMode.value = !editMode.value
+}
+
+function onCardClick(stream: StreamView) {
+  if (editMode.value) return
+  play(stream)
+}
+
+function onCardDragStart(event: DragEvent, id: string) {
+  if (!editMode.value) return
+  dragFromId.value = id
+  event.dataTransfer?.setData('text/plain', id)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+}
+
+function onCardDragOver(event: DragEvent) {
+  if (!editMode.value) return
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+async function onCardDrop(event: DragEvent, targetId: string) {
+  event.preventDefault()
+  const fromId = dragFromId.value || event.dataTransfer?.getData('text/plain') || ''
+  dragFromId.value = null
+  if (!fromId || fromId === targetId) return
+  const list = [...streams.value]
+  const from = list.findIndex((s) => s.id === fromId)
+  const to = list.findIndex((s) => s.id === targetId)
+  if (from < 0 || to < 0) return
+  const [item] = list.splice(from, 1)
+  list.splice(to, 0, item)
+  streams.value = list
+  await ReorderStreams(list.map((s) => s.id))
+}
+
+function onCardDragEnd() {
+  dragFromId.value = null
 }
 
 async function uploadImage(stream: StreamView) {
@@ -217,6 +269,17 @@ onUnmounted(() => {
       </div>
       <div class="flex gap-2">
         <button
+          v-if="streams.length > 0"
+          class="icon-btn"
+          :class="editMode ? 'icon-btn-active' : ''"
+          title="Edit streams"
+          aria-label="Edit streams"
+          :aria-pressed="editMode"
+          @click="toggleEditMode"
+        >
+          <Pencil :size="iconSize" />
+        </button>
+        <button
           class="icon-btn"
           :class="showSettings ? 'icon-btn-active' : ''"
           title="Settings"
@@ -299,9 +362,18 @@ onUnmounted(() => {
           v-for="stream in streams"
           :key="stream.id"
           class="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-emerald-400/40 hover:bg-white/10"
-          :class="playback.streamId === stream.id ? 'ring-2 ring-emerald-400/60' : ''"
+          :class="[
+            playback.streamId === stream.id ? 'ring-2 ring-emerald-400/60' : '',
+            editMode ? 'cursor-grab' : '',
+            dragFromId === stream.id ? 'opacity-70' : '',
+          ]"
+          :draggable="editMode"
+          @dragstart="onCardDragStart($event, stream.id)"
+          @dragover="onCardDragOver"
+          @drop="onCardDrop($event, stream.id)"
+          @dragend="onCardDragEnd"
         >
-          <button class="block w-full text-left" @click="play(stream)">
+          <button class="block w-full text-left" :tabindex="editMode ? -1 : 0" @click="onCardClick(stream)">
             <div class="relative aspect-square w-full overflow-hidden bg-zinc-900">
               <img
                 v-if="stream.imageData"
@@ -312,7 +384,10 @@ onUnmounted(() => {
               <div v-else class="flex h-full items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 text-zinc-600">
                 <Music2 :size="40" />
               </div>
-              <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+              <div
+                v-if="!editMode"
+                class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100"
+              >
                 <Play :size="32" class="text-white" fill="currentColor" />
               </div>
             </div>
@@ -321,14 +396,14 @@ onUnmounted(() => {
               <p class="truncate text-xs text-zinc-500">{{ stream.url }}</p>
             </div>
           </button>
-          <div class="absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100">
-            <button class="card-action-btn" title="Upload artwork" aria-label="Upload artwork" @click.stop="uploadImage(stream)">
+          <div v-if="editMode" class="absolute right-2 top-2 z-10 flex gap-1" @mousedown.stop>
+            <button class="card-action-btn" title="Upload artwork" aria-label="Upload artwork" draggable="false" @click.stop="uploadImage(stream)">
               <ImagePlus :size="iconSizeSm" />
             </button>
-            <button class="card-action-btn" title="Edit stream" aria-label="Edit stream" @click.stop="openEdit(stream)">
+            <button class="card-action-btn" title="Edit stream" aria-label="Edit stream" draggable="false" @click.stop="openEdit(stream)">
               <Pencil :size="iconSizeSm" />
             </button>
-            <button class="card-action-btn card-action-btn-danger" title="Delete stream" aria-label="Delete stream" @click.stop="deleteStream(stream)">
+            <button class="card-action-btn card-action-btn-danger" title="Delete stream" aria-label="Delete stream" draggable="false" @click.stop="deleteStream(stream)">
               <Trash2 :size="iconSizeSm" />
             </button>
           </div>

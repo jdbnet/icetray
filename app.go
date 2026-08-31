@@ -172,6 +172,15 @@ func (a *App) UpdateStream(id, name, url string) error {
 	return nil
 }
 
+// ReorderStreams saves a new stream list order.
+func (a *App) ReorderStreams(ids []string) error {
+	if err := a.cfg.ReorderStreams(ids); err != nil {
+		return err
+	}
+	a.emitStreamsChanged()
+	return nil
+}
+
 // RemoveStream deletes a stream and its artwork.
 func (a *App) RemoveStream(id string) error {
 	removed, err := a.cfg.RemoveStreamByID(id)

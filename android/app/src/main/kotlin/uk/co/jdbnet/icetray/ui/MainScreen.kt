@@ -11,9 +11,11 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,11 +71,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -110,7 +120,7 @@ fun IceTrayTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = IceTrayDarkScheme, content = content)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
     val context = LocalContext.current
@@ -157,6 +167,10 @@ fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
     val nowPlaying by viewModel.nowPlaying.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
+    var editMode by remember { mutableStateOf(false) }
+    var draggingId by remember { mutableStateOf<String?>(null) }
+    var dragRoot by remember { mutableStateOf(Offset.Zero) }
+    val itemBounds = remember { mutableStateMapOf<String, Rect>() }
     var showModal by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<StreamView?>(null) }
     var formName by remember { mutableStateOf("") }
@@ -173,6 +187,16 @@ fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
         }
         artworkTargetId = null
     }
+
+    LaunchedEffect(streams.size) {
+        if (streams.isEmpty()) {
+            editMode = false
+            draggingId = null
+        }
+    }
+
+    val streamsRef = remember { mutableStateOf(streams) }
+    streamsRef.value = streams
 
     val currentStream = streams.find { it.id == playback.streamId }
     val displayTitle = nowPlaying.title.ifBlank {
@@ -213,7 +237,10 @@ fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
         ) {
             Header(
                 showSettings = showSettings,
+                editMode = editMode,
+                showEdit = streams.isNotEmpty(),
                 onToggleSettings = { showSettings = !showSettings },
+                onToggleEdit = { editMode = !editMode },
                 onAdd = {
                     editing = null
                     formName = ""
@@ -256,6 +283,51 @@ fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
                         StreamCard(
                             stream = stream,
                             selected = playback.streamId == stream.id,
+                            editMode = editMode,
+                            dragging = draggingId == stream.id,
+                            modifier = Modifier
+                                .animateItem()
+                                .onGloballyPositioned { coords ->
+                                    itemBounds[stream.id] = coords.boundsInRoot()
+                                }
+                                .then(
+                                    if (editMode) {
+                                        Modifier.pointerInput(stream.id) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = { offset ->
+                                                    draggingId = stream.id
+                                                    val bounds = itemBounds[stream.id]
+                                                    dragRoot = if (bounds != null) {
+                                                        Offset(bounds.left + offset.x, bounds.top + offset.y)
+                                                    } else {
+                                                        Offset.Zero
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    draggingId = null
+                                                    viewModel.persistStreamOrder()
+                                                },
+                                                onDragCancel = { draggingId = null },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragRoot += dragAmount
+                                                    val fromId = draggingId ?: return@detectDragGesturesAfterLongPress
+                                                    val targetId = itemBounds.entries.firstOrNull { (id, rect) ->
+                                                        id != fromId && rect.contains(dragRoot)
+                                                    }?.key ?: return@detectDragGesturesAfterLongPress
+                                                    val current = streamsRef.value
+                                                    val from = current.indexOfFirst { it.id == fromId }
+                                                    val to = current.indexOfFirst { it.id == targetId }
+                                                    if (from >= 0 && to >= 0 && from != to) {
+                                                        viewModel.moveStream(from, to)
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
                             onPlay = { viewModel.playStream(stream) },
                             onEdit = {
                                 editing = stream
@@ -306,7 +378,14 @@ fun MainScreen(viewModel: PlayerViewModel = viewModel()) {
 }
 
 @Composable
-private fun Header(showSettings: Boolean, onToggleSettings: () -> Unit, onAdd: () -> Unit) {
+private fun Header(
+    showSettings: Boolean,
+    editMode: Boolean,
+    showEdit: Boolean,
+    onToggleSettings: () -> Unit,
+    onToggleEdit: () -> Unit,
+    onAdd: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -320,6 +399,15 @@ private fun Header(showSettings: Boolean, onToggleSettings: () -> Unit, onAdd: (
             Text("Your Icecast stations", style = MaterialTheme.typography.bodySmall, color = Zinc400)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (showEdit) {
+                CircleIconButton(
+                    active = editMode,
+                    onClick = onToggleEdit,
+                    contentDescription = if (editMode) "Done editing" else "Edit streams",
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = null)
+                }
+            }
             CircleIconButton(
                 active = showSettings,
                 onClick = onToggleSettings,
@@ -418,21 +506,32 @@ private fun EmptyState(onAdd: () -> Unit) {
 private fun StreamCard(
     stream: StreamView,
     selected: Boolean,
+    editMode: Boolean,
+    dragging: Boolean,
+    modifier: Modifier = Modifier,
     onPlay: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onArtwork: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(16.dp))
+            .graphicsLayer {
+                if (dragging) {
+                    scaleX = 1.03f
+                    scaleY = 1.03f
+                    alpha = 0.92f
+                }
+            }
+            .shadow(if (dragging) 8.dp else 0.dp, RoundedCornerShape(16.dp))
             .background(Surface)
             .border(
                 width = if (selected) 2.dp else 1.dp,
                 color = if (selected) Emerald.copy(alpha = 0.6f) else Border,
                 shape = RoundedCornerShape(16.dp),
             )
-            .clickable(onClick = onPlay),
+            .clickable(enabled = !editMode, onClick = onPlay),
     ) {
         Column {
             Box(
@@ -464,7 +563,7 @@ private fun StreamCard(
                 .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            AnimatedVisibility(visible = selected) {
+            AnimatedVisibility(visible = editMode) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     SmallActionIcon(Icons.Default.Image, "Upload artwork", onArtwork)
                     SmallActionIcon(Icons.Default.Edit, "Edit stream", onEdit)

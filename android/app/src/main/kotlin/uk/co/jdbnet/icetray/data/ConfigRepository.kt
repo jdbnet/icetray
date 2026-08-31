@@ -74,6 +74,22 @@ class ConfigRepository(context: Context) {
         removed
     }
 
+    suspend fun reorderStreams(ids: List<String>) = withContext(Dispatchers.IO) {
+        val config = load()
+        if (ids.size != config.streams.size) {
+            throw IllegalArgumentException("stream order length mismatch")
+        }
+        val byId = config.streams.associateBy { it.id }
+        val seen = mutableSetOf<String>()
+        val next = ids.map { id ->
+            if (!seen.add(id)) {
+                throw IllegalArgumentException("duplicate stream id: $id")
+            }
+            byId[id] ?: throw IllegalArgumentException("stream not found: $id")
+        }
+        save(config.copy(streams = next))
+    }
+
     suspend fun setStreamImage(id: String, filename: String) = withContext(Dispatchers.IO) {
         val config = load()
         val updated = config.streams.map {
