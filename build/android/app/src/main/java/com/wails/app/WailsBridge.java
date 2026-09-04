@@ -1,5 +1,6 @@
 package com.wails.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -22,7 +23,6 @@ import android.hardware.SensorManager;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -36,13 +36,13 @@ import android.os.PowerManager;
 import android.os.StatFs;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.WebView;
 import android.widget.Toast;
@@ -52,6 +52,9 @@ import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.FragmentActivity;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKey;
@@ -74,7 +77,6 @@ import java.util.concurrent.Executor;
 public class WailsBridge {
     private static final String TAG = "WailsBridge";
     private static final boolean DEBUG = BuildConfig.DEBUG;
-    private static final int LOCATION_PERMISSION_REQUEST = 1002;
 
     static {
         // Load the native Go library
@@ -317,7 +319,7 @@ public class WailsBridge {
                 insetRight = insets.right;
             } else {
                 DisplayMetrics metrics = new DisplayMetrics();
-                activity.getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
+                fillLegacyDisplayMetrics(metrics);
                 widthPx = metrics.widthPixels;
                 heightPx = metrics.heightPixels;
                 density = metrics.density;
@@ -335,6 +337,11 @@ public class WailsBridge {
             Log.e(TAG, "getScreenInfoJson failed", e);
             return "";
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void fillLegacyDisplayMetrics(DisplayMetrics metrics) {
+        activity.getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
     }
 
     /**
@@ -406,18 +413,23 @@ public class WailsBridge {
 
     public void vibrate(int durationMs) {
         try {
-            Vibrator vibrator = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
+            Vibrator vibrator = getVibrator();
             if (vibrator == null || !vibrator.hasVibrator()) {
                 return;
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE));
-            } else {
-                vibrator.vibrate(durationMs);
-            }
+            vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE));
         } catch (Exception e) {
             Log.e(TAG, "vibrate failed", e);
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private Vibrator getVibrator() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            VibratorManager manager = (VibratorManager) activity.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+            return manager != null ? manager.getDefaultVibrator() : null;
+        }
+        return (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
     }
 
     // MARK: - Mobile features (Phase A)
@@ -574,9 +586,7 @@ public class WailsBridge {
         try {
             PackageInfo pi = activity.getPackageManager()
                     .getPackageInfo(activity.getPackageName(), 0);
-            long code = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                    ? pi.getLongVersionCode()
-                    : pi.versionCode;
+            long code = packageVersionCode(pi);
             CharSequence label = activity.getApplicationInfo()
                     .loadLabel(activity.getPackageManager());
             return new JSONObject()
@@ -588,6 +598,14 @@ public class WailsBridge {
         } catch (Exception e) {
             return "{}";
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private long packageVersionCode(PackageInfo pi) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return pi.getLongVersionCode();
+        }
+        return pi.versionCode;
     }
 
     /**
@@ -625,27 +643,18 @@ public class WailsBridge {
                 JSONObject opts = new JSONObject(json);
                 String style = opts.optString("style", "default");
                 boolean hidden = opts.optBoolean("hidden", false);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    WindowInsetsController c = activity.getWindow().getInsetsController();
-                    if (c != null) {
-                        if ("dark".equals(style)) {
-                            c.setSystemBarsAppearance(
-                                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-                                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
-                        } else if ("light".equals(style)) {
-                            c.setSystemBarsAppearance(0,
-                                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
-                        }
-                        if (hidden) c.hide(WindowInsets.Type.statusBars());
-                        else c.show(WindowInsets.Type.statusBars());
-                    }
+                View decor = activity.getWindow().getDecorView();
+                WindowInsetsControllerCompat controller =
+                        WindowCompat.getInsetsController(activity.getWindow(), decor);
+                if ("dark".equals(style)) {
+                    controller.setAppearanceLightStatusBars(true);
+                } else if ("light".equals(style)) {
+                    controller.setAppearanceLightStatusBars(false);
+                }
+                if (hidden) {
+                    controller.hide(WindowInsetsCompat.Type.statusBars());
                 } else {
-                    int vis = activity.getWindow().getDecorView().getSystemUiVisibility();
-                    if ("dark".equals(style)) vis |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-                    else if ("light".equals(style)) vis &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-                    if (hidden) vis |= View.SYSTEM_UI_FLAG_FULLSCREEN;
-                    else vis &= ~View.SYSTEM_UI_FLAG_FULLSCREEN;
-                    activity.getWindow().getDecorView().setSystemUiVisibility(vis);
+                    controller.show(WindowInsetsCompat.Type.statusBars());
                 }
             } catch (Exception e) {
                 Log.e(TAG, "setStatusBar failed", e);
@@ -723,9 +732,10 @@ public class WailsBridge {
                     nm.createNotificationChannel(ch);
                 }
                 if (Build.VERSION.SDK_INT >= 33 && activity.checkSelfPermission(
-                        "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
-                    activity.requestPermissions(
-                            new String[]{"android.permission.POST_NOTIFICATIONS"}, 1001);
+                        Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    if (activity instanceof MainActivity) {
+                        ((MainActivity) activity).requestNotificationPermission();
+                    }
                 }
                 Notification n = new NotificationCompat.Builder(activity, channelId)
                         .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -743,11 +753,11 @@ public class WailsBridge {
     }
 
     /**
-     * Backing store for secure storage. Uses EncryptedSharedPreferences (AES via
-     * the Android Keystore). Requires API 23+. Returns null if secure storage
-     * cannot be initialized — callers MUST check for null and report the error.
-     * The result is cached after the first call.
+     * Backing store for secure storage. Wails still uses EncryptedSharedPreferences
+     * (stable security-crypto 1.1.0). The class is deprecated in favour of
+     * DataStore+Tink; IceTray does not add new callers.
      */
+    @SuppressWarnings("deprecation")
     private SharedPreferences securePrefs() {
         if (securePrefsResolved) {
             return cachedSecurePrefs;
@@ -856,7 +866,7 @@ public class WailsBridge {
      */
     public void haptic(final String type) {
         try {
-            Vibrator vibrator = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
+            Vibrator vibrator = getVibrator();
             if (vibrator == null || !vibrator.hasVibrator()) return;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 int effect;
@@ -869,12 +879,10 @@ public class WailsBridge {
                         effect = VibrationEffect.EFFECT_CLICK; break;
                 }
                 vibrator.vibrate(VibrationEffect.createPredefined(effect));
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            } else {
                 long ms = "impact-heavy".equals(type) || "error".equals(type) ? 40
                         : "impact-light".equals(type) || "selection".equals(type) ? 10 : 20;
                 vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
-            } else {
-                vibrator.vibrate(20);
             }
         } catch (Exception e) {
             Log.e(TAG, "haptic failed", e);
@@ -899,18 +907,16 @@ public class WailsBridge {
                 == PackageManager.PERMISSION_GRANTED;
     }
 
-    public void onRequestPermissionsResult(int requestCode, int[] grantResults) {
-        if (requestCode == LOCATION_PERMISSION_REQUEST) {
-            boolean shouldResume = pendingLocationRequest;
-            pendingLocationRequest = false;
-            if (!shouldResume) {
-                return;
-            }
-            if (hasLocationPermission()) {
-                getLocation();
-            } else {
-                emitLocationError("location permission denied");
-            }
+    public void onLocationPermissionResult(boolean granted) {
+        boolean shouldResume = pendingLocationRequest;
+        pendingLocationRequest = false;
+        if (!shouldResume) {
+            return;
+        }
+        if (granted && hasLocationPermission()) {
+            getLocation();
+        } else {
+            emitLocationError("location permission denied");
         }
     }
 
@@ -923,9 +929,12 @@ public class WailsBridge {
             try {
                 if (!hasLocationPermission()) {
                     pendingLocationRequest = true;
-                    activity.requestPermissions(new String[]{
-                            "android.permission.ACCESS_FINE_LOCATION",
-                            "android.permission.ACCESS_COARSE_LOCATION"}, LOCATION_PERMISSION_REQUEST);
+                    if (activity instanceof MainActivity) {
+                        ((MainActivity) activity).requestLocationPermission();
+                    } else {
+                        pendingLocationRequest = false;
+                        emitLocationError("location permission denied");
+                    }
                     return;
                 }
                 LocationManager lm = (LocationManager) activity.getSystemService(Context.LOCATION_SERVICE);
@@ -938,6 +947,7 @@ public class WailsBridge {
                         : new String[]{LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER};
                 for (String provider : providers) {
                     try {
+                        @SuppressWarnings("deprecation")
                         Location l = lm.getLastKnownLocation(provider);
                         if (l != null && (best == null || l.getTime() > best.getTime())) best = l;
                     } catch (SecurityException | IllegalArgumentException ignored) {
@@ -953,17 +963,17 @@ public class WailsBridge {
                         : lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
                         ? LocationManager.NETWORK_PROVIDER : null;
                 if (provider == null) { emitLocationError("no location provider enabled"); return; }
-                lm.requestSingleUpdate(provider, new LocationListener() {
-                    @Override public void onLocationChanged(Location location) { emitLocation(location); }
-                    @Override public void onProviderEnabled(String p) {}
-                    @Override public void onProviderDisabled(String p) {}
-                    @Override public void onStatusChanged(String p, int s, android.os.Bundle e) {}
-                }, Looper.getMainLooper());
+                requestLegacyLocationUpdate(lm, provider);
             } catch (Exception e) {
                 Log.e(TAG, "getLocation failed", e);
                 emitLocationError("exception");
             }
         });
+    }
+
+    @SuppressWarnings("deprecation")
+    private void requestLegacyLocationUpdate(LocationManager lm, String provider) {
+        lm.requestSingleUpdate(provider, this::emitLocation, Looper.getMainLooper());
     }
 
     private void emitLocation(Location l) {
@@ -1106,7 +1116,7 @@ public class WailsBridge {
     public String getPowerJson() {
         try {
             IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-            android.content.Intent batt = activity.registerReceiver(null, filter);
+            android.content.Intent batt = stickyReceiver(filter);
             float level = -1;
             boolean charging = false;
             if (batt != null) {
@@ -1127,6 +1137,14 @@ public class WailsBridge {
         } catch (Exception e) {
             return "{\"level\":-1,\"charging\":false,\"lowPower\":false}";
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private android.content.Intent stickyReceiver(IntentFilter filter) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return activity.registerReceiver(null, filter, Context.RECEIVER_NOT_EXPORTED);
+        }
+        return activity.registerReceiver(null, filter);
     }
 
     /** Network status as {"connected":bool,"type":"wifi|cellular|ethernet|none"}. */
@@ -1162,15 +1180,9 @@ public class WailsBridge {
             if (enabled != 0) {
                 if (keyboardListener != null) return;
                 keyboardListener = (v, insets) -> {
-                    int imeHeight = 0;
-                    boolean visible;
-                    if (Build.VERSION.SDK_INT >= 30) {
-                        imeHeight = insets.getInsets(WindowInsets.Type.ime()).bottom;
-                        visible = insets.isVisible(WindowInsets.Type.ime());
-                    } else {
-                        imeHeight = insets.getSystemWindowInsetBottom();
-                        visible = imeHeight > 0;
-                    }
+                    WindowInsetsCompat compat = WindowInsetsCompat.toWindowInsetsCompat(insets, v);
+                    int imeHeight = compat.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+                    boolean visible = compat.isVisible(WindowInsetsCompat.Type.ime());
                     emitKeyboard(visible, imeHeight);
                     return insets;
                 };

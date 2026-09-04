@@ -190,9 +190,10 @@ tasks:
     cmds:
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i
     env:
-      # Bindings are generated from the Go AST. Disable CGO so Ubuntu CI does
-      # not pkg-config gtk4/webkitgtk-6.0 while loading wails/v3 on Linux.
-      CGO_ENABLED: "0"
+      # Bindings typecheck the Go AST. CGO must be on so oto and Wails GTK3
+      # symbols resolve. Linux callers pass -tags ...gtk3 so pkg-config uses
+      # webkit2gtk-4.1 rather than GTK4.
+      CGO_ENABLED: "1"
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` from build/appicon.png

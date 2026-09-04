@@ -33,6 +33,13 @@ if [ -z "${VERSION:-}" ] && [ -f "${REPO_ROOT}/VERSION" ]; then
 fi
 echo "==> Android version ${VERSION:-unknown}"
 
+echo "==> Installing GTK3 headers for bindings generation..."
+# Bindings typecheck with CGO + gtk3 (webkit2gtk-4.1). The CLI install below
+# still uses CGO_ENABLED=0 because it links operatingsystem without gtk3 tags.
+sudo apt-get update -qq
+sudo apt-get install -y -qq gcc pkg-config libgtk-3-dev libayatana-appindicator3-dev \
+  libasound2-dev libwebkit2gtk-4.1-dev
+
 echo "==> Installing Wails v3 CLI..."
 # The CLI links wails/v3/internal/operatingsystem, which pkg-configs gtk4
 # unless CGO is off. Ubuntu runners do not have gtk4.

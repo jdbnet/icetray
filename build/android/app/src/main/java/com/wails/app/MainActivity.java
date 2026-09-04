@@ -1,12 +1,16 @@
 package com.wails.app;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -15,9 +19,6 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
-import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.util.Base64;
@@ -30,11 +31,11 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import android.Manifest;
-
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.view.WindowCompat;
@@ -65,7 +66,6 @@ public class MainActivity extends AppCompatActivity {
     private static final boolean DEBUG = BuildConfig.DEBUG;
     private static final String WAILS_SCHEME = "https";
     private static final String WAILS_HOST = "wails.localhost";
-    private static final int FILE_PICKER_REQUEST = 7001;
 
     private WebView webView;
     private WailsBridge bridge;
@@ -77,11 +77,34 @@ public class MainActivity extends AppCompatActivity {
 
     // The Go-side dialog ID of the in-flight file picker (-1 when idle)
     private int pendingFilePickerCallbackID = -1;
-    private static final int PHOTO_CAPTURE_REQUEST = 7002;
-    private static final int VIDEO_CAPTURE_REQUEST = 7003;
-    private static final int CAMERA_PERMISSION_REQUEST = 7010;
     private File pendingCaptureFile;
     private boolean pendingCaptureIsVideo;
+
+    private final ActivityResultLauncher<Intent> filePickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result ->
+                    handleFilePickerResult(result.getResultCode(), result.getData()));
+    private final ActivityResultLauncher<Intent> captureLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result ->
+                    handleCaptureResult(result.getResultCode(), result.getData()));
+    private final ActivityResultLauncher<String> cameraPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted) {
+                    launchCameraCapture(pendingCaptureIsVideo);
+                } else if (bridge != null) {
+                    bridge.emitEvent("common:capture", "{\"error\":\"camera permission denied\"}");
+                }
+            });
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> { });
+    private final ActivityResultLauncher<String[]> locationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                if (bridge == null) {
+                    return;
+                }
+                boolean granted = Boolean.TRUE.equals(result.get(Manifest.permission.ACCESS_FINE_LOCATION))
+                        || Boolean.TRUE.equals(result.get(Manifest.permission.ACCESS_COARSE_LOCATION));
+                bridge.onLocationPermissionResult(granted);
+            });
 
     // System-event sources (battery/power, screen lock, network). Registered in
     // onCreate, torn down in onDestroy. Each forwards a "system:*" event to JS
@@ -97,6 +120,17 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         hideStatusBar();
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                    return;
+                }
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+            }
+        });
 
         // Initialize the native Go library
         bridge = new WailsBridge(this);
@@ -112,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
         loadApplication();
     }
 
-    private void requestNotificationPermission() {
+    public void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             return;
         }
@@ -120,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
                 == PackageManager.PERMISSION_GRANTED) {
             return;
         }
-        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 7100);
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -132,7 +166,6 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
@@ -238,9 +271,9 @@ public class MainActivity extends AppCompatActivity {
      * the result is delivered to JS as a "common:capture" event.
      */
     public void launchCameraCapture(boolean video) {
-        if (checkSelfPermission("android.permission.CAMERA") != PackageManager.PERMISSION_GRANTED) {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             pendingCaptureIsVideo = video;
-            requestPermissions(new String[]{"android.permission.CAMERA"}, CAMERA_PERMISSION_REQUEST);
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
             return;
         }
         try {
@@ -255,7 +288,7 @@ public class MainActivity extends AppCompatActivity {
             // Don't pre-check with resolveActivity(): Android 11+ package visibility
             // hides other apps' intents unless declared in <queries>, so it can
             // return null even when a camera app exists. Just launch and handle a miss.
-            startActivityForResult(intent, video ? VIDEO_CAPTURE_REQUEST : PHOTO_CAPTURE_REQUEST);
+            captureLauncher.launch(intent);
         } catch (android.content.ActivityNotFoundException e) {
             bridge.emitEvent("common:capture", "{\"error\":\"no camera app available\"}");
         } catch (Exception e) {
@@ -264,20 +297,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == CAMERA_PERMISSION_REQUEST) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                launchCameraCapture(pendingCaptureIsVideo);
-            } else {
-                bridge.emitEvent("common:capture", "{\"error\":\"camera permission denied\"}");
-            }
-            return;
-        }
-        if (bridge != null) {
-            bridge.onRequestPermissionsResult(requestCode, grantResults);
-        }
+    public void requestLocationPermission() {
+        locationPermissionLauncher.launch(new String[]{
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+        });
     }
 
     private void handleCaptureResult(int resultCode, @Nullable Intent data) {
@@ -463,7 +487,7 @@ public class MainActivity extends AppCompatActivity {
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple);
         try {
-            startActivityForResult(intent, FILE_PICKER_REQUEST);
+            filePickerLauncher.launch(intent);
         } catch (Exception e) {
             Log.e(TAG, "Failed to launch file picker", e);
             pendingFilePickerCallbackID = -1;
@@ -471,16 +495,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == PHOTO_CAPTURE_REQUEST || requestCode == VIDEO_CAPTURE_REQUEST) {
-            handleCaptureResult(resultCode, data);
-            return;
-        }
-        if (requestCode != FILE_PICKER_REQUEST) {
-            return;
-        }
+    private void handleFilePickerResult(int resultCode, @Nullable Intent data) {
         final int callbackID = pendingFilePickerCallbackID;
         pendingFilePickerCallbackID = -1;
         if (callbackID == -1) {
@@ -575,7 +590,7 @@ public class MainActivity extends AppCompatActivity {
                 emitBattery(intent);
             }
         };
-        registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        registerReceiverCompat(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
 
         // Low-power (battery saver) mode toggles → re-emit battery with the flag.
         powerSaveReceiver = new BroadcastReceiver() {
@@ -583,7 +598,7 @@ public class MainActivity extends AppCompatActivity {
                 emitBattery(registerSticky(Intent.ACTION_BATTERY_CHANGED));
             }
         };
-        registerReceiver(powerSaveReceiver,
+        registerReceiverCompat(powerSaveReceiver,
                 new IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED));
 
         // Screen lock / unlock. SCREEN_OFF ≈ locked; USER_PRESENT = unlocked.
@@ -600,7 +615,7 @@ public class MainActivity extends AppCompatActivity {
         IntentFilter screenFilter = new IntentFilter();
         screenFilter.addAction(Intent.ACTION_SCREEN_OFF);
         screenFilter.addAction(Intent.ACTION_USER_PRESENT);
-        registerReceiver(screenReceiver, screenFilter);
+        registerReceiverCompat(screenReceiver, screenFilter);
 
         // Network connectivity / transport type / cellular signal strength.
         connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -645,10 +660,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    private Intent registerReceiverCompat(@Nullable BroadcastReceiver receiver, IntentFilter filter) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        }
+        return registerReceiver(receiver, filter);
+    }
+
     /** Read the current sticky value for an action without a standing receiver. */
     @Nullable
     private Intent registerSticky(String action) {
-        return registerReceiver(null, new IntentFilter(action));
+        return registerReceiverCompat(null, new IntentFilter(action));
     }
 
     /** Push current battery / network / theme so a freshly-loaded UI is populated. */
@@ -856,15 +879,6 @@ public class MainActivity extends AppCompatActivity {
         }
         if (webView != null) {
             webView.destroy();
-        }
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
         }
     }
 }

@@ -44,7 +44,7 @@ tasks:
       - task: generate:android:overlay
       - task: common:build:frontend
         vars:
-          BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android{{else}}-tags android,debug{{end}}'
+          BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,gtk3{{else}}-tags gtk3{{end}}'
           PRODUCTION:
             ref: .PRODUCTION
     cmds:
@@ -52,6 +52,7 @@ tasks:
       - task: compile:go:shared
         vars:
           ARCH: '{{.ARCH | default .HOST_ARCH}}'
+          PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:
       BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false -ldflags="-w -s -X main.version={{.VERSION}}"{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l"{{end}}'
     env:
@@ -119,9 +120,11 @@ tasks:
       - task: compile:go:shared
         vars:
           ARCH: arm64
+          PRODUCTION: '{{.PRODUCTION | default "false"}}'
       - task: compile:go:shared
         vars:
           ARCH: amd64
+          PRODUCTION: '{{.PRODUCTION | default "false"}}'
 
   package:
     summary: Packages a production build of the application into a signed release APK
@@ -267,12 +270,11 @@ tasks:
     generates:
       - frontend/bindings/**/*
     cmds:
-      # Bindings are generated from the Go AST; CGO is disabled so the NDK
-      # is not required for this step
-      - wails3 generate bindings -f '-tags android' -clean=true
+      # Bindings typecheck the Go AST with Linux GTK3, not the Android JNI
+      # tag set. App methods are the same; CGO must be on so oto/Wails resolve.
+      - wails3 generate bindings -f '{{if eq .PRODUCTION "true"}}-tags production,gtk3{{else}}-tags gtk3{{end}}' -clean=true -ts -i
     env:
-      GOOS: android
-      CGO_ENABLED: 0
+      CGO_ENABLED: "1"
 
   ensure-emulator:
     internal: true
