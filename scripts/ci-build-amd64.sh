@@ -14,7 +14,9 @@ sudo apt-get update -qq
 sudo apt-get install -y -qq ${LINUX_PACKAGES}
 
 echo "==> Installing Wails v3 CLI..."
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
+# The CLI links wails/v3/internal/operatingsystem, which pkg-configs gtk4
+# unless CGO is off. Ubuntu runners do not have gtk4.
+CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
 export PATH="$(go env GOPATH)/bin:${PATH}"
 
 bash scripts/set-version.sh

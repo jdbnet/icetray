@@ -79,7 +79,7 @@ Requirements:
 - Go 1.25+
 - Node.js 20+
 - Linux: `libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `libasound2-dev`
-- [Wails v3 CLI](https://v3.wails.io/getting-started/installation/): `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16`
+- [Wails v3 CLI](https://v3.wails.io/getting-started/installation/): `CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16`
 
 Release Linux binaries use GTK3 (`webkit2gtk-4.1`) so Ubuntu 22.04 and Debian 12 keep working.
 
