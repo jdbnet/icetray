@@ -5,11 +5,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SRC="assets/icon.png"
+ANDROID_SRC="assets/icon-android.png"
 BG="#0B0C10"
 ANDROID_RES="build/android/app/src/main/res"
 
-if [[ ! -f "$SRC" || ! -f assets/icon.ico ]]; then
-  echo "missing assets/icon.png or assets/icon.ico" >&2
+if [[ ! -f "$SRC" || ! -f assets/icon.ico || ! -f "$ANDROID_SRC" ]]; then
+  echo "missing assets/icon.png, assets/icon.ico, or assets/icon-android.png" >&2
   exit 1
 fi
 if ! command -v magick >/dev/null 2>&1; then
@@ -30,7 +31,7 @@ mkdir -p build/windows build/darwin build/ios \
   "$ANDROID_RES/mipmap-xxxhdpi"
 
 cp -f "$SRC" build/appicon.png
-cp -f "$SRC" "$ANDROID_RES/drawable/ic_launcher_foreground.png"
+cp -f "$ANDROID_SRC" "$ANDROID_RES/drawable/ic_launcher_foreground.png"
 
 wails3 generate icons \
   -input build/appicon.png \
@@ -54,7 +55,7 @@ magick "$SRC" -background "$BG" -alpha remove -alpha off -filter Lanczos \
 resize_square() {
   local size="$1"
   local dest="$2"
-  magick "$SRC" -background "$BG" -alpha remove -alpha off -filter Lanczos \
+  magick "$ANDROID_SRC" -background "$BG" -alpha remove -alpha off -filter Lanczos \
     -resize "${size}x${size}" "$dest"
 }
 
@@ -62,7 +63,7 @@ resize_round() {
   local size="$1"
   local dest="$2"
   local cx=$((size / 2))
-  magick "$SRC" -background "$BG" -alpha remove -alpha off -filter Lanczos \
+  magick "$ANDROID_SRC" -background "$BG" -alpha remove -alpha off -filter Lanczos \
     -resize "${size}x${size}" \
     \( +clone -alpha extract -fill white -colorize 100 \
       -fill black -draw "circle ${cx},${cx} ${cx},0" -alpha off -negate \) \
