@@ -42,8 +42,7 @@ tasks:
       - task: generate:android:overlay
       - task: common:build:frontend
         vars:
-          BUILD_FLAGS:
-            ref: .BUILD_FLAGS
+          BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android{{else}}-tags android,debug{{end}}'
           PRODUCTION:
             ref: .PRODUCTION
     cmds:

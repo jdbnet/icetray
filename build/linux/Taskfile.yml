@@ -4,8 +4,8 @@ includes:
   common: ../Taskfile.yml
 
 vars:
-  # Release/CI Linux artifacts should pass EXTRA_TAGS=gtk3 so Ubuntu 22.04 /
-  # Debian 12 keep webkit2gtk-4.1. Local rolling distros can omit it for GTK4.
+  # IceTray ships GTK3 + webkit2gtk-4.1 (Debian/Ubuntu).
+  EXTRA_TAGS: gtk3
   # Signing configuration - edit these values for your project
   # PGP_KEY: "path/to/signing-key.asc"
   # SIGN_ROLE: "builder"  # Options: origin, maint, archive, builder
@@ -28,7 +28,7 @@ tasks:
           ARCH: '{{.ARCH}}'
           DEV: '{{.DEV}}'
           OUTPUT: '{{.OUTPUT}}'
-          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS | default "gtk3"}}'
           OBFUSCATED: '{{.OBFUSCATED}}'
           GARBLE_ARGS: '{{.GARBLE_ARGS}}'
     vars:
@@ -47,8 +47,7 @@ tasks:
       - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
-          BUILD_FLAGS:
-            ref: .BUILD_FLAGS
+          BUILD_FLAGS: '-tags {{if eq .DEV "true"}}{{else}}production,{{end}}{{.EXTRA_TAGS | default "gtk3"}}'
           OBFUSCATED:
             ref: .OBFUSCATED
           DEV:

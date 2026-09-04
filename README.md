@@ -35,7 +35,6 @@ Get the latest build from [GitHub Releases](https://github.com/jdbnet/icetray/re
 
 ```bash
 curl -fsSL https://apt.jdbnet.co.uk/install/stable.sh | sudo bash
-sudo apt update
 sudo apt install icetray
 ```
 
@@ -82,11 +81,11 @@ Requirements:
 - Linux: `libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `libasound2-dev`
 - [Wails v3 CLI](https://v3.wails.io/getting-started/installation/): `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16`
 
-Release Linux binaries use GTK3 (`EXTRA_TAGS=gtk3`) so Ubuntu 22.04 and Debian 12 keep working. Local rolling distros can omit that tag to build against GTK4.
+Release Linux binaries use GTK3 (`webkit2gtk-4.1`) so Ubuntu 22.04 and Debian 12 keep working.
 
 ```bash
 bash scripts/set-version.sh
-wails3 task linux:build EXTRA_TAGS=gtk3
+wails3 task linux:build
 ```
 
 Windows installer (from Linux with nsis installed):
