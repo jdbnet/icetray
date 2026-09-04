@@ -19,6 +19,7 @@ export interface SettingsView {
   launchMinimized: boolean
   volume: number
   desktop: boolean
+  version: string
 }
 
 export interface NowPlaying {

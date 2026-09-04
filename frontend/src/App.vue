@@ -50,6 +50,7 @@ const settings = ref<SettingsView>({
   launchMinimized: false,
   volume: 80,
   desktop: true,
+  version: '',
 })
 const nowPlaying = ref<NowPlaying>({ station: '', title: '' })
 
@@ -355,6 +356,10 @@ onUnmounted(() => {
             />
             <span class="setting-switch-track" />
           </label>
+        </div>
+        <div class="setting-row">
+          <p class="setting-title">Version</p>
+          <p class="font-mono text-sm text-zinc-400">{{ settings.version }}</p>
         </div>
       </div>
     </div>

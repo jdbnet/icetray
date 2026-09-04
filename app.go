@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -24,6 +25,9 @@ import (
 	"git.jdbnet.co.uk/jamie/icetray/stream"
 )
 
+//go:embed VERSION
+var embeddedVersion string
+
 // StreamView is a stream exposed to the frontend.
 type StreamView struct {
 	ID        string `json:"id"`
@@ -43,11 +47,12 @@ type PlaybackState struct {
 
 // SettingsView exposes app settings to the frontend.
 type SettingsView struct {
-	Autoplay        bool `json:"autoplay"`
-	LaunchOnLogin   bool `json:"launchOnLogin"`
-	LaunchMinimized bool `json:"launchMinimized"`
-	Volume          int  `json:"volume"`
-	Desktop         bool `json:"desktop"`
+	Autoplay        bool   `json:"autoplay"`
+	LaunchOnLogin   bool   `json:"launchOnLogin"`
+	LaunchMinimized bool   `json:"launchMinimized"`
+	Volume          int    `json:"volume"`
+	Desktop         bool   `json:"desktop"`
+	Version         string `json:"version"`
 }
 
 // App is the Wails application binding layer.
@@ -367,6 +372,7 @@ func (a *App) GetSettings() SettingsView {
 		LaunchMinimized: a.cfg.GetLaunchMinimized(),
 		Volume:          a.cfg.GetVolume(),
 		Desktop:         runtime.GOOS != "android",
+		Version:         strings.TrimSpace(embeddedVersion),
 	}
 }
 
