@@ -22,7 +22,7 @@ Unicode true
 ## !define INFO_PROJECTNAME    "my-project" # Default "icetray"
 ## !define INFO_COMPANYNAME    "My Company" # Default "JDB-NET Limited"
 ## !define INFO_PRODUCTNAME    "My Product Name" # Default "IceTray"
-## !define INFO_PRODUCTVERSION "1.0.0"     # Default "1.2.7"
+## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.0.0"
 ## !define INFO_COPYRIGHT      "(c) Now, My Company" # Default "Copyright JDB-NET Limited"
 ###
 ## !define PRODUCT_EXECUTABLE  "Application.exe"      # Default "${INFO_PROJECTNAME}.exe"

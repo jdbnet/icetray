@@ -17,7 +17,7 @@
         PackageDisplayName="IceTray"
         PublisherName="CN=JDB-NET Limited"
         PublisherDisplayName="JDB-NET Limited"
-        Version="1.2.7.0"
+        Version="0.0.0.0"
         PackageDescription="Internet radio player for Icecast streams">
         <Capabilities>
             <Capability Name="runFullTrust" />

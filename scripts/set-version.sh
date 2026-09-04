@@ -26,6 +26,7 @@ resolve_version() {
 }
 
 version="$(resolve_version)"
+printf '%s\n' "${version}" > VERSION
 
 python3 - "${version}" <<'PY'
 import json
@@ -72,6 +73,18 @@ if nfpm.is_file():
         count=1,
         flags=re.M,
     ))
+
+plist_re = re.compile(
+    r'(<key>CFBundle(?:ShortVersionString|Version)</key>\s*<string>)[^<]+',
+)
+for plist in (
+    Path("build/darwin/Info.plist"),
+    Path("build/darwin/Info.dev.plist"),
+    Path("build/ios/Info.plist"),
+    Path("build/ios/Info.dev.plist"),
+):
+    if plist.is_file():
+        plist.write_text(plist_re.sub(rf'\g<1>{version}', plist.read_text()))
 PY
 
-echo "==> Version ${version} synced to build/config.yml"
+echo "==> Version ${version} synced to VERSION and packaging metadata"

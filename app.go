@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -24,9 +23,6 @@ import (
 	"git.jdbnet.co.uk/jamie/icetray/startup"
 	"git.jdbnet.co.uk/jamie/icetray/stream"
 )
-
-//go:embed VERSION
-var embeddedVersion string
 
 // StreamView is a stream exposed to the frontend.
 type StreamView struct {
@@ -372,7 +368,7 @@ func (a *App) GetSettings() SettingsView {
 		LaunchMinimized: a.cfg.GetLaunchMinimized(),
 		Volume:          a.cfg.GetVolume(),
 		Desktop:         runtime.GOOS != "android",
-		Version:         strings.TrimSpace(embeddedVersion),
+		Version:         appVersion(),
 	}
 }
 
