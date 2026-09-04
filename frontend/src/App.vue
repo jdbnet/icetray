@@ -491,6 +491,12 @@ onUnmounted(() => {
           />
           <input
             v-model="formURL"
+            type="url"
+            inputmode="url"
+            autocapitalize="none"
+            autocomplete="url"
+            autocorrect="off"
+            spellcheck="false"
             placeholder="https://example.com/stream.mp3"
             class="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 outline-none focus:border-emerald-400"
           />
