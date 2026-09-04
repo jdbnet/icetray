@@ -18,6 +18,7 @@ export interface SettingsView {
   launchOnLogin: boolean
   launchMinimized: boolean
   volume: number
+  desktop: boolean
 }
 
 export interface NowPlaying {
@@ -25,4 +26,8 @@ export interface NowPlaying {
   title: string
   genre?: string
   listeners?: number
+}
+
+export interface WailsEvent<T> {
+  data: T
 }

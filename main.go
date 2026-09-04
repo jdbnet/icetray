@@ -108,16 +108,13 @@ func main() {
 
 // getConfigDir returns the IceTray config directory, creating it if necessary.
 func getConfigDir() (string, error) {
-	baseDir, err := os.UserConfigDir()
+	configDir, err := platformConfigDir()
 	if err != nil {
 		return "", err
 	}
-
-	configDir := filepath.Join(baseDir, "IceTray")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", err
 	}
-
 	return configDir, nil
 }
 

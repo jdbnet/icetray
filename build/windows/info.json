@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "1.2.7"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "1.2.7",
+			"CompanyName": "JDB-NET Limited",
+			"FileDescription": "Internet radio player for Icecast streams",
+			"LegalCopyright": "Copyright JDB-NET Limited",
+			"ProductName": "IceTray",
+			"Comments": "Internet radio player for Icecast streams"
+		}
+	}
+}

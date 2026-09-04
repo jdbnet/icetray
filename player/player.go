@@ -10,7 +10,6 @@ import (
 	"github.com/gopxl/beep"
 	"github.com/gopxl/beep/effects"
 	"github.com/gopxl/beep/mp3"
-	"github.com/gopxl/beep/speaker"
 
 	"git.jdbnet.co.uk/jamie/icetray/logger"
 )
@@ -21,7 +20,7 @@ const (
 	// preBufferMinBytes is the minimum data required when the max wait elapses.
 	preBufferMinBytes = 4 * 1024
 	// preBufferMaxWait is the longest to wait for the target buffer before starting with less data.
-	preBufferMaxWait = 2 * time.Second
+	preBufferMaxWait      = 2 * time.Second
 	preBufferPollInterval = 20 * time.Millisecond
 )
 
@@ -88,12 +87,11 @@ func (p *Player) ensureSpeaker() error {
 	if p.speakerReady {
 		return nil
 	}
-	err := speaker.Init(speakerSampleRate, speakerSampleRate.N(time.Second/10))
-	if err != nil {
+	if err := initOutput(); err != nil {
 		return err
 	}
 	p.speakerReady = true
-	logger.Log("Speaker initialized successfully at 44100Hz")
+	logger.Log("audio output initialized at 44100Hz")
 	return nil
 }
 
@@ -141,8 +139,7 @@ func (p *Player) ClearSource() {
 }
 
 func (p *Player) clearSpeaker() {
-	// speaker.Clear locks internally; do not wrap with speaker.Lock (self-deadlock).
-	speaker.Clear()
+	clearOutput()
 }
 
 // stopActiveStreamLocked stops the active streamer. Must be called with p.mu locked.
@@ -260,6 +257,11 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) 
 	if format.SampleRate != speakerSampleRate {
 		output = beep.Resample(4, format.SampleRate, speakerSampleRate, volumeEffect)
 	}
+	output = bufferPlayback(output)
+	if buffered, ok := output.(playbackBuffer); ok {
+		defer buffered.stopFill()
+		buffered.waitReady(speakerSampleRate.N(2*time.Second), 4*time.Second)
+	}
 
 	// 5. Wrap in Ctrl to support Pause/Resume
 	p.mu.Lock()
@@ -276,8 +278,7 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) 
 	p.volumeEffect = volumeEffect
 	p.mu.Unlock()
 
-	// 6. Play on speaker (Play locks internally; do not wrap with speaker.Lock).
-	speaker.Play(ctrl)
+	playOutput(ctrl)
 	logger.Log("playSource: speaker playback started")
 
 	p.mu.Lock()
@@ -303,11 +304,7 @@ func (p *Player) Pause() error {
 	}
 
 	p.isPaused = true
-	if p.ctrl != nil {
-		speaker.Lock()
-		p.ctrl.Paused = true
-		speaker.Unlock()
-	}
+	pauseOutput(p.ctrl, true)
 	logger.Log("Pause: playback paused")
 	go p.notifyStateChange()
 	return nil
@@ -326,11 +323,7 @@ func (p *Player) Resume() error {
 	}
 
 	p.isPaused = false
-	if p.ctrl != nil {
-		speaker.Lock()
-		p.ctrl.Paused = false
-		speaker.Unlock()
-	}
+	pauseOutput(p.ctrl, false)
 	logger.Log("Resume: playback resumed")
 	go p.notifyStateChange()
 	return nil
@@ -369,11 +362,11 @@ func (p *Player) SetVolume(vol int) error {
 	p.mu.Unlock()
 
 	if volEffect != nil {
-		speaker.Lock()
+		lockOutput()
 		beepVol, silent := uiVolumeToEffect(vol)
 		volEffect.Volume = beepVol
 		volEffect.Silent = silent
-		speaker.Unlock()
+		unlockOutput()
 	}
 
 	logger.Log(fmt.Sprintf("Volume: set to %d", vol))

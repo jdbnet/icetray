@@ -3,16 +3,12 @@
 package main
 
 import (
-	"context"
 	"os"
 	"runtime"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 
-	"git.jdbnet.co.uk/jamie/icetray/assets"
 	"git.jdbnet.co.uk/jamie/icetray/config"
 	"git.jdbnet.co.uk/jamie/icetray/logger"
 	"git.jdbnet.co.uk/jamie/icetray/player"
@@ -28,45 +24,55 @@ func init() {
 
 // runHeaded initializes the Wails player UI and system tray.
 func runHeaded(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm startup.StartupManager) {
-	app := NewApp(cfg, p, sup, sm)
-	trayMgr := tray.NewTrayManager(cfg, p, sup, sm, app)
-	trayMgr.Start()
+	svc := NewApp(cfg, p, sup, sm)
 
-	background := options.RGBA{R: 18, G: 18, B: 20, A: 255}
+	wailsApp := application.New(application.Options{
+		Name:        "IceTray",
+		Description: "Internet radio player for Icecast streams",
+		Services: []application.Service{
+			application.NewService(svc),
+		},
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(frontendAssets),
+		},
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
+		},
+	})
 
 	startHidden := false
 	if runtime.GOOS == "windows" || runtime.GOOS == "linux" {
 		startHidden = cfg.GetLaunchMinimized()
 	}
 
-	err := wails.Run(&options.App{
-		Title:             "IceTray",
-		Width:             1100,
-		Height:            720,
-		MinWidth:          800,
-		MinHeight:         560,
-		HideWindowOnClose: true,
-		StartHidden:       startHidden,
-		BackgroundColour:  &background,
-		AssetServer: &assetserver.Options{
-			Assets: frontendAssets,
-		},
-		OnStartup: app.startup,
-		OnShutdown: func(ctx context.Context) {
-			app.Shutdown()
-		},
-		Bind: []interface{}{
-			app,
-		},
-		Linux: &linux.Options{
-			Icon: assets.Icon,
-		},
+	window := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             "main",
+		Title:            "IceTray",
+		Width:            1100,
+		Height:           720,
+		MinWidth:         800,
+		MinHeight:        560,
+		Hidden:           startHidden,
+		BackgroundColour: application.NewRGB(18, 18, 20),
+		URL:              "/",
 	})
-	if err != nil {
-		logger.LogFatal("Wails application failed", err)
+
+	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		if runtime.GOOS == "android" {
+			return
+		}
+		window.Hide()
+		e.Cancel()
+	})
+
+	svc.setWindow(window)
+
+	if runtime.GOOS != "android" {
+		trayMgr := tray.NewTrayManager(wailsApp, cfg, p, sm, svc)
+		trayMgr.Start()
 	}
 
-	if runtime.GOOS == "windows" {
-		trayMgr.Wait()
+	if err := wailsApp.Run(); err != nil {
+		logger.LogFatal("Wails application failed", err)
 	}
 }

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MsixPackagingToolTemplate
+    xmlns="http://schemas.microsoft.com/msix/packaging/msixpackagingtool/template/2022">
+    <Settings
+        AllowTelemetry="false"
+        ApplyACLsToPackageFiles="true"
+        GenerateCommandLineFile="true"
+        AllowPromptForPassword="false">
+    </Settings>
+    <Installer
+        Path="icetray-scaffold"
+        Arguments=""
+        InstallLocation="C:\Program Files\JDB-NET Limited\IceTray">
+    </Installer>
+    <PackageInformation
+        PackageName="IceTray"
+        PackageDisplayName="IceTray"
+        PublisherName="CN=JDB-NET Limited"
+        PublisherDisplayName="JDB-NET Limited"
+        Version="1.2.7.0"
+        PackageDescription="Internet radio player for Icecast streams">
+        <Capabilities>
+            <Capability Name="runFullTrust" />
+            
+        </Capabilities>
+        <Applications>
+            <Application
+                Id="uk.co.jdbnet.icetray"
+                Description="Internet radio player for Icecast streams"
+                DisplayName="IceTray"
+                ExecutableName="icetray-scaffold"
+                EntryPoint="Windows.FullTrustApplication">
+                
+            </Application>
+        </Applications>
+        <Resources>
+            <Resource Language="en-us" />
+        </Resources>
+        <Dependencies>
+            <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+        </Dependencies>
+        <Properties>
+            <Framework>false</Framework>
+            <DisplayName>IceTray</DisplayName>
+            <PublisherDisplayName>JDB-NET Limited</PublisherDisplayName>
+            <Description>Internet radio player for Icecast streams</Description>
+            <Logo>Assets\AppIcon.png</Logo>
+        </Properties>
+    </PackageInformation>
+    <SaveLocation PackagePath="icetray-scaffold.msix" />
+    <PackageIntegrity>
+        <CertificatePath></CertificatePath>
+    </PackageIntegrity>
+</MsixPackagingToolTemplate>

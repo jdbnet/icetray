@@ -8,11 +8,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"git.jdbnet.co.uk/jamie/icetray/config"
 	"git.jdbnet.co.uk/jamie/icetray/images"
@@ -42,15 +43,17 @@ type PlaybackState struct {
 
 // SettingsView exposes app settings to the frontend.
 type SettingsView struct {
-	Autoplay         bool `json:"autoplay"`
-	LaunchOnLogin    bool `json:"launchOnLogin"`
-	LaunchMinimized  bool `json:"launchMinimized"`
-	Volume           int  `json:"volume"`
+	Autoplay        bool `json:"autoplay"`
+	LaunchOnLogin   bool `json:"launchOnLogin"`
+	LaunchMinimized bool `json:"launchMinimized"`
+	Volume          int  `json:"volume"`
+	Desktop         bool `json:"desktop"`
 }
 
 // App is the Wails application binding layer.
 type App struct {
-	ctx context.Context
+	wails  *application.App
+	window application.Window
 
 	cfg        *config.Config
 	player     *player.Player
@@ -75,12 +78,17 @@ func NewApp(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm sta
 	return a
 }
 
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
+func (a *App) setWindow(window application.Window) {
+	a.window = window
+}
+
+// ServiceStartup initialises Wails runtime access and optional autoplay.
+func (a *App) ServiceStartup(_ context.Context, _ application.ServiceOptions) error {
+	a.wails = application.Get()
+	bindAndroidApp(a)
 
 	if a.cfg.GetAutoplay() {
 		go func() {
-			// Let Wails and the platform audio stack finish coming up before playback.
 			time.Sleep(500 * time.Millisecond)
 			a.playbackMu.Lock()
 			defer a.playbackMu.Unlock()
@@ -98,27 +106,37 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 	a.emitPlaybackState()
+	return nil
+}
+
+// ServiceShutdown stops playback on application exit.
+func (a *App) ServiceShutdown() error {
+	a.Shutdown()
+	return nil
 }
 
 func (a *App) emitPlaybackState() {
-	if a.ctx == nil {
+	if a.wails == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, "playback:state", a.GetPlaybackState())
+	state := a.GetPlaybackState()
+	a.wails.Event.Emit("playback:state", state)
+	pushAndroidSession(a, state, a.nowPlaying)
 }
 
 func (a *App) emitNowPlaying() {
-	if a.ctx == nil {
+	if a.wails == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, "nowplaying:update", a.nowPlaying)
+	a.wails.Event.Emit("nowplaying:update", a.nowPlaying)
+	pushAndroidSession(a, a.GetPlaybackState(), a.nowPlaying)
 }
 
 func (a *App) emitStreamsChanged() {
-	if a.ctx == nil {
+	if a.wails == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, "streams:changed", nil)
+	a.wails.Event.Emit("streams:changed", nil)
 }
 
 // GetStreams returns all saved streams with optional embedded image data.
@@ -195,12 +213,16 @@ func (a *App) RemoveStream(id string) error {
 
 // PickStreamImage opens a file dialog and saves artwork for a stream.
 func (a *App) PickStreamImage(streamID string) (StreamView, error) {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Choose stream artwork",
-		Filters: []runtime.FileFilter{
+	if a.wails == nil {
+		return StreamView{}, errInvalidInput("application not ready")
+	}
+	path, err := a.wails.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
+		Title:          "Choose stream artwork",
+		CanChooseFiles: true,
+		Filters: []application.FileFilter{
 			{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.webp"},
 		},
-	})
+	}).PromptForSingleSelection()
 	if err != nil {
 		return StreamView{}, err
 	}
@@ -240,8 +262,6 @@ func (a *App) PlayStream(id string) error {
 
 func (a *App) stopPlaybackLocked() {
 	a.stopMetadataPoller()
-	// Stop audio output before tearing down the network reader so the speaker
-	// is not left waiting on an empty ring buffer (fab12f6 reversed this order).
 	a.player.Stop()
 	a.supervisor.Stop()
 }
@@ -262,7 +282,7 @@ func (a *App) playStreamLocked(id string) error {
 		return err
 	}
 	a.supervisor.Start(s.URL)
-	a.player.SetVolume(a.cfg.GetVolume())
+	a.player.SetVolume(a.playbackVolume())
 	_ = a.cfg.SetLastStreamID(id)
 	a.currentID = id
 	a.startMetadataPoller(s.URL)
@@ -310,15 +330,18 @@ func (a *App) Stop() error {
 // GetPlaybackState returns current playback state.
 func (a *App) GetPlaybackState() PlaybackState {
 	return PlaybackState{
-		Playing:  a.player.IsPlaying(),
+		Playing:  a.player.IsRunning() && !a.player.IsPaused(),
 		Paused:   a.player.IsRunning() && a.player.IsPaused(),
 		StreamID: a.currentID,
 		Volume:   a.cfg.GetVolume(),
 	}
 }
 
-// SetVolume sets volume 0-100.
+// SetVolume sets volume 0-100. Android uses the device volume only.
 func (a *App) SetVolume(vol int) error {
+	if runtime.GOOS == "android" {
+		return nil
+	}
 	if err := a.cfg.SetVolume(vol); err != nil {
 		return err
 	}
@@ -329,13 +352,21 @@ func (a *App) SetVolume(vol int) error {
 	return nil
 }
 
+func (a *App) playbackVolume() int {
+	if runtime.GOOS == "android" {
+		return 100
+	}
+	return a.cfg.GetVolume()
+}
+
 // GetSettings returns app settings.
 func (a *App) GetSettings() SettingsView {
 	return SettingsView{
-		Autoplay:         a.cfg.GetAutoplay(),
-		LaunchOnLogin:    a.cfg.GetLaunchOnLogin(),
-		LaunchMinimized:  a.cfg.GetLaunchMinimized(),
-		Volume:           a.cfg.GetVolume(),
+		Autoplay:        a.cfg.GetAutoplay(),
+		LaunchOnLogin:   a.cfg.GetLaunchOnLogin(),
+		LaunchMinimized: a.cfg.GetLaunchMinimized(),
+		Volume:          a.cfg.GetVolume(),
+		Desktop:         runtime.GOOS != "android",
 	}
 }
 
@@ -370,19 +401,20 @@ func (a *App) GetNowPlaying() metadata.NowPlaying {
 
 // ShowPlayer shows and focuses the main window.
 func (a *App) ShowPlayer() {
-	if a.ctx == nil {
+	if a.window == nil {
 		return
 	}
-	runtime.WindowShow(a.ctx)
-	runtime.WindowUnminimise(a.ctx)
+	a.window.Show()
+	a.window.UnMinimise()
+	a.window.Focus()
 }
 
 // QuitApp exits the application.
 func (a *App) QuitApp() {
-	if a.ctx == nil {
+	if a.wails == nil {
 		return
 	}
-	runtime.Quit(a.ctx)
+	a.wails.Quit()
 }
 
 func (a *App) startMetadataPoller(streamURL string) {
@@ -486,4 +518,26 @@ func (a *App) Shutdown() {
 // GetImagePath returns the filesystem path for a stream image (for tray/debug).
 func (a *App) GetImagePath(filename string) string {
 	return filepath.Join(a.cfg.ImagesDir(), filename)
+}
+
+func (a *App) sessionArtworkPath() string {
+	if a.currentID == "" {
+		return ""
+	}
+	s, ok := a.cfg.GetStreamByID(a.currentID)
+	if !ok || s.Image == "" {
+		return ""
+	}
+	return images.ImagePath(a.cfg.ImagesDir(), s.Image)
+}
+
+func (a *App) sessionStationName() string {
+	if a.currentID == "" {
+		return "IceTray"
+	}
+	s, ok := a.cfg.GetStreamByID(a.currentID)
+	if !ok {
+		return "IceTray"
+	}
+	return s.Name
 }

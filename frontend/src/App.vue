@@ -34,9 +34,9 @@ import {
   SetVolume,
   Stop,
   UpdateStream,
-} from '../wailsjs/go/main/App.js'
-import type { NowPlaying, PlaybackState, SettingsView, StreamView } from './types'
-import { EventsOn } from '../wailsjs/runtime/runtime.js'
+} from '../bindings/git.jdbnet.co.uk/jamie/icetray/app'
+import type { NowPlaying, PlaybackState, SettingsView, StreamView, WailsEvent } from './types'
+import { Events } from '@wailsio/runtime'
 
 const iconSize = 18
 const iconSizeLg = 22
@@ -49,6 +49,7 @@ const settings = ref<SettingsView>({
   launchOnLogin: false,
   launchMinimized: false,
   volume: 80,
+  desktop: true,
 })
 const nowPlaying = ref<NowPlaying>({ station: '', title: '' })
 
@@ -56,6 +57,7 @@ const showModal = ref(false)
 const showSettings = ref(false)
 const editMode = ref(false)
 const editing = ref<StreamView | null>(null)
+const pendingDelete = ref<StreamView | null>(null)
 const formName = ref('')
 const formURL = ref('')
 const formError = ref('')
@@ -73,7 +75,7 @@ const displaySubtitle = computed(() => {
 let unsubs: Array<() => void> = []
 
 async function refreshStreams() {
-  streams.value = await GetStreams()
+  streams.value = (await GetStreams()) ?? []
 }
 
 async function refreshPlayback() {
@@ -125,8 +127,18 @@ async function saveStream() {
   }
 }
 
-async function deleteStream(stream: StreamView) {
-  if (!confirm(`Remove "${stream.name}"?`)) return
+function requestDelete(stream: StreamView) {
+  pendingDelete.value = stream
+}
+
+function cancelDelete() {
+  pendingDelete.value = null
+}
+
+async function confirmDelete() {
+  const stream = pendingDelete.value
+  if (!stream) return
+  pendingDelete.value = null
   await RemoveStream(stream.id)
   await refreshStreams()
   await refreshPlayback()
@@ -243,13 +255,13 @@ async function setLaunchMinimized(enabled: boolean) {
 onMounted(async () => {
   await loadAll()
   unsubs.push(
-    EventsOn('playback:state', (state: PlaybackState) => {
-      playback.value = state
+    Events.On('playback:state', (event: WailsEvent<PlaybackState>) => {
+      playback.value = event.data
     }),
-    EventsOn('nowplaying:update', (np: NowPlaying) => {
-      nowPlaying.value = np
+    Events.On('nowplaying:update', (event: WailsEvent<NowPlaying>) => {
+      nowPlaying.value = event.data
     }),
-    EventsOn('streams:changed', () => {
+    Events.On('streams:changed', () => {
       refreshStreams()
     }),
   )
@@ -261,8 +273,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
-    <header class="flex items-center justify-between border-b border-white/10 px-6 py-4">
+  <div class="flex h-full min-h-0 flex-col">
+    <header class="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4">
       <div>
         <h1 class="text-xl font-semibold tracking-tight">IceTray</h1>
         <p class="text-sm text-zinc-400">Your Icecast stations</p>
@@ -294,7 +306,7 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <div v-if="showSettings" class="border-b border-white/10 bg-white/5 px-6 py-4">
+    <div v-if="showSettings" class="border-b border-white/10 bg-white/5 px-4 py-4 sm:px-6">
       <p class="mb-3 text-sm font-medium text-zinc-300">Settings</p>
       <div class="space-y-4">
         <div class="setting-row">
@@ -312,10 +324,12 @@ onUnmounted(() => {
             <span class="setting-switch-track" />
           </label>
         </div>
-        <div class="setting-row">
+        <div v-if="settings.desktop" class="setting-row">
           <div class="setting-copy">
             <p class="setting-title">Launch on login</p>
-            <p class="setting-desc">Start IceTray in the background when you sign in to your computer.</p>
+            <p class="setting-desc">
+              Start IceTray in the background when you sign in to your computer.
+            </p>
           </div>
           <label class="setting-switch">
             <input
@@ -327,7 +341,7 @@ onUnmounted(() => {
             <span class="setting-switch-track" />
           </label>
         </div>
-        <div class="setting-row">
+        <div v-if="settings.desktop" class="setting-row">
           <div class="setting-copy">
             <p class="setting-title">Start minimised</p>
             <p class="setting-desc">Keep the player window hidden on startup. Open it from the system tray when you need it.</p>
@@ -345,7 +359,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <main class="flex-1 overflow-y-auto px-6 py-6">
+    <main class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
       <div v-if="loading" class="flex items-center gap-2 text-zinc-400">
         <LoaderCircle :size="iconSize" class="animate-spin" />
       </div>
@@ -357,7 +371,7 @@ onUnmounted(() => {
           <Plus :size="iconSize" />
         </button>
       </div>
-      <div v-else class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div v-else class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         <article
           v-for="stream in streams"
           :key="stream.id"
@@ -393,17 +407,16 @@ onUnmounted(() => {
             </div>
             <div class="p-3">
               <h2 class="truncate font-medium">{{ stream.name }}</h2>
-              <p class="truncate text-xs text-zinc-500">{{ stream.url }}</p>
             </div>
           </button>
-          <div v-if="editMode" class="absolute right-2 top-2 z-10 flex gap-1" @mousedown.stop>
+          <div v-if="editMode" class="absolute right-2 top-2 z-10 flex gap-1" @mousedown.stop @pointerdown.stop>
             <button class="card-action-btn" title="Upload artwork" aria-label="Upload artwork" draggable="false" @click.stop="uploadImage(stream)">
               <ImagePlus :size="iconSizeSm" />
             </button>
             <button class="card-action-btn" title="Edit stream" aria-label="Edit stream" draggable="false" @click.stop="openEdit(stream)">
               <Pencil :size="iconSizeSm" />
             </button>
-            <button class="card-action-btn card-action-btn-danger" title="Delete stream" aria-label="Delete stream" draggable="false" @click.stop="deleteStream(stream)">
+            <button class="card-action-btn card-action-btn-danger" title="Delete stream" aria-label="Delete stream" draggable="false" @click.stop="requestDelete(stream)">
               <Trash2 :size="iconSizeSm" />
             </button>
           </div>
@@ -411,9 +424,9 @@ onUnmounted(() => {
       </div>
     </main>
 
-    <footer class="border-t border-white/10 bg-black/40 px-6 py-4 backdrop-blur">
-      <div class="flex items-center gap-4">
-        <div class="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-800">
+    <footer class="border-t border-white/10 bg-black/40 px-4 py-3 backdrop-blur sm:px-6 sm:py-4">
+      <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+        <div class="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-zinc-800 sm:h-14 sm:w-14">
           <img
             v-if="currentStream?.imageData"
             :src="currentStream.imageData"
@@ -446,7 +459,7 @@ onUnmounted(() => {
             <Square :size="iconSize" fill="currentColor" />
           </button>
         </div>
-        <div class="hidden w-44 items-center gap-2 md:flex">
+        <div v-if="settings.desktop" class="flex w-full items-center gap-2 sm:w-44 sm:max-w-none">
           <Volume2 :size="iconSizeSm" class="shrink-0 text-zinc-500" />
           <input
             type="range"
@@ -490,6 +503,23 @@ onUnmounted(() => {
           <button class="icon-btn icon-btn-primary" title="Save" aria-label="Save" @click="saveStream">
             <Check :size="iconSize" />
           </button>
+        </div>
+      </div>
+    </div>
+    <div v-if="pendingDelete" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @click.self="cancelDelete">
+      <div class="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Remove stream</h3>
+          <button class="icon-btn" title="Close" aria-label="Close" @click="cancelDelete">
+            <X :size="iconSize" />
+          </button>
+        </div>
+        <p class="mt-4 text-sm text-zinc-300">
+          Remove <span class="font-medium text-white">{{ pendingDelete.name }}</span>? This cannot be undone.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
+          <button class="text-btn" type="button" @click="cancelDelete">Cancel</button>
+          <button class="text-btn text-btn-danger" type="button" @click="confirmDelete">Remove</button>
         </div>
       </div>
     </div>
@@ -626,5 +656,35 @@ onUnmounted(() => {
 
 .card-action-btn-danger:hover {
   color: rgb(252 165 165);
+}
+
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.05);
+  padding: 0.5rem 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(212 212 216);
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.text-btn:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: rgb(255 255 255);
+}
+
+.text-btn-danger {
+  border-color: rgb(248 113 113 / 0.4);
+  background: rgb(239 68 68);
+  color: rgb(255 255 255);
+}
+
+.text-btn-danger:hover {
+  background: rgb(248 113 113);
+  color: rgb(255 255 255);
 }
 </style>

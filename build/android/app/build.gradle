@@ -1,0 +1,103 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.wails.app'
+    compileSdk 36
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    defaultConfig {
+        applicationId "uk.co.jdbnet.icetray"
+        minSdk 26
+        targetSdk 36
+        def versionPair = resolveAndroidVersion()
+        versionCode versionPair[0]
+        versionName versionPair[1]
+
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    def keystoreFile = System.getenv("ANDROID_KEYSTORE_FILE") ?: System.getenv("ANDROID_KEYSTORE_PATH")
+    def hasKeystore = keystoreFile != null && !keystoreFile.trim().isEmpty() && file(keystoreFile).isFile()
+
+    signingConfigs {
+        release {
+            if (hasKeystore) {
+                storeFile file(keystoreFile)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig hasKeystore ? signingConfigs.release : signingConfigs.debug
+        }
+        debug {
+            debuggable true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+
+    packagingOptions {
+        doNotStrip '*/arm64-v8a/libwails.so'
+        doNotStrip '*/x86_64/libwails.so'
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.9.0'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'androidx.media3:media3-session:1.5.1'
+    implementation 'androidx.media3:media3-common:1.5.1'
+}
+
+def resolveAndroidVersion() {
+    def raw = System.getenv("VERSION")?.trim()
+    if (raw == null || raw.isEmpty()) {
+        def versionFile = rootProject.layout.projectDirectory.asFile.toPath().resolve("../../VERSION").toFile()
+        if (versionFile.isFile()) {
+            raw = versionFile.getText('UTF-8').trim()
+        } else {
+            raw = "1.0.0"
+        }
+    }
+    raw = raw.replaceFirst(/^v/, "")
+    def core = raw.split("-", 2)[0]
+    def parts = core.split("\\.")
+    def major = parts.length > 0 ? (parts[0].isInteger() ? parts[0].toInteger() : 1) : 1
+    def minor = parts.length > 1 ? (parts[1].isInteger() ? parts[1].toInteger() : 0) : 0
+    def patch = parts.length > 2 ? (parts[2].isInteger() ? parts[2].toInteger() : 0) : 0
+    def code = Math.max(1, major * 1000000 + minor * 1000 + patch)
+    return [code, raw]
+}
