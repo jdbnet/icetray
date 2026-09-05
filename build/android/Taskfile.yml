@@ -70,7 +70,7 @@ tasks:
         fi
         if [ -z "$NDK_ROOT" ] || [ ! -d "$NDK_ROOT" ]; then
           echo "Error: Android NDK not found"
-          echo "Install one with: sdkmanager 'ndk;26.3.11579264' (or set ANDROID_NDK_HOME)"
+          echo "Install one with: sdkmanager 'ndk;28.2.13676358' (or set ANDROID_NDK_HOME)"
           exit 1
         fi
 
@@ -105,12 +105,33 @@ tasks:
 
         export CGO_ENABLED=1
         export GOOS=android
+        # go build -buildmode=c-shared does not pick up NDK r28's 16 KB CMake
+        # default. Pass ELF LOAD alignment to the NDK linker for Play's 16 KB page
+        # size requirement (Android 15+).
+        export CGO_LDFLAGS="${CGO_LDFLAGS:+${CGO_LDFLAGS} }-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 
         mkdir -p {{.BIN_DIR}}
         mkdir -p build/android/app/src/main/jniLibs/$JNI_DIR
 
+        SO_OUT="build/android/app/src/main/jniLibs/$JNI_DIR/libwails.so"
         go build -buildmode=c-shared -overlay build/android/overlay.json {{.BUILD_FLAGS}} \
-          -o build/android/app/src/main/jniLibs/$JNI_DIR/libwails.so
+          -o "$SO_OUT"
+
+        READELF="$TOOLCHAIN/bin/llvm-readelf"
+        if [ -x "$READELF" ]; then
+          if ! "$READELF" -lW "$SO_OUT" | awk '
+            /LOAD/ {
+              align=$NF
+              if (align != "0x4000" && align != "16384") { bad=1 }
+            }
+            END { exit bad+0 }
+          '; then
+            echo "Error: $SO_OUT LOAD segments are not 16 KB aligned (need 0x4000)" >&2
+            "$READELF" -lW "$SO_OUT" >&2 || true
+            exit 1
+          fi
+          echo "16 KB page check passed for $SO_OUT"
+        fi
     vars:
       BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false -ldflags="-w -s -X main.version={{.VERSION}}"{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l"{{end}}'
 

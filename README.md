@@ -110,7 +110,7 @@ Requirements:
 
 - JDK 21
 - Android SDK (API 36)
-- Android NDK r26.3 (`sdkmanager 'ndk;26.3.11579264'` or `ANDROID_NDK_HOME`)
+- Android NDK r28.2 (`sdkmanager 'ndk;28.2.13676358'` or `ANDROID_NDK_HOME`)
 
 ```bash
 bash scripts/ci-build-android.sh

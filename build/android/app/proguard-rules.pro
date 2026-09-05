@@ -1,17 +1,13 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
+# JNI, WebView JS bridge, and media session: Go and the system look these up by name.
+-keepattributes *Annotation*,InnerClasses,EnclosingMethod,Signature
 
-# Keep native methods
 -keepclasseswithmembernames class * {
     native <methods>;
 }
 
-# Keep Wails bridge classes
--keep class com.wails.app.WailsBridge { *; }
--keep class com.wails.app.WailsJSBridge { *; }
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
 
-# Keep IceTray JNI and media session glue
--keep class uk.co.jdbnet.icetray.NativeBridge { *; }
--keep class uk.co.jdbnet.icetray.playback.PlaybackService { *; }
--keep class uk.co.jdbnet.icetray.BootReceiver { *; }
+-keep class com.wails.app.** { *; }
+-keep class uk.co.jdbnet.icetray.** { *; }

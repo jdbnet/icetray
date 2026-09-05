@@ -2,12 +2,12 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
 }
 
 android {
     namespace = 'com.wails.app'
     compileSdk = 36
+    ndkVersion = "28.2.13676358"
 
     buildFeatures {
         buildConfig = true
@@ -42,7 +42,8 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled = false
+            minifyEnabled = true
+            shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig = hasKeystore ? signingConfigs.release : signingConfigs.debug
         }
@@ -65,6 +66,7 @@ android {
 
     packaging {
         jniLibs {
+            useLegacyPackaging = false
             keepDebugSymbols += ['*/arm64-v8a/libwails.so', '*/x86_64/libwails.so']
         }
     }
