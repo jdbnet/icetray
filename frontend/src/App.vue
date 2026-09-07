@@ -15,7 +15,7 @@ import {
   Volume2,
   X,
 } from '@lucide/vue'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   AddStream,
   GetNowPlaying,
@@ -42,6 +42,11 @@ const iconSize = 18
 const iconSizeLg = 22
 const iconSizeSm = 15
 
+const CARD_MIN = 112
+const CARD_MAX = 220
+const CARD_GAP = 16
+const CARD_TITLE = 56
+
 const streams = ref<StreamView[]>([])
 const playback = ref<PlaybackState>({ playing: false, paused: false, streamId: '', volume: 80 })
 const settings = ref<SettingsView>({
@@ -64,6 +69,63 @@ const formURL = ref('')
 const formError = ref('')
 const loading = ref(true)
 const dragFromId = ref<string | null>(null)
+const gridHost = ref<HTMLElement | null>(null)
+const cardSize = ref(CARD_MAX)
+const gridCols = ref(2)
+const gridOverflow = ref(false)
+
+let gridObserver: ResizeObserver | null = null
+
+function columnsForSize(width: number, size: number): number {
+  return Math.max(1, Math.floor((width + CARD_GAP) / (size + CARD_GAP)))
+}
+
+function gridFits(count: number, width: number, height: number, size: number): boolean {
+  const cols = columnsForSize(width, size)
+  const rows = Math.ceil(count / cols)
+  const totalW = cols * size + (cols - 1) * CARD_GAP
+  const totalH = rows * (size + CARD_TITLE) + (rows - 1) * CARD_GAP
+  return totalW <= width + 0.5 && totalH <= height + 0.5
+}
+
+function fitStationGrid(count: number, width: number, height: number): { size: number; cols: number; overflow: boolean } {
+  const minSize = Math.min(CARD_MIN, Math.max(72, Math.floor(width)))
+  if (count < 1 || width < 1 || height < 1) {
+    return { size: CARD_MAX, cols: 1, overflow: false }
+  }
+  if (gridFits(count, width, height, CARD_MAX)) {
+    return { size: CARD_MAX, cols: columnsForSize(width, CARD_MAX), overflow: false }
+  }
+  let lo = minSize
+  let hi = CARD_MAX
+  let best = minSize
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (gridFits(count, width, height, mid)) {
+      best = mid
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  return {
+    size: best,
+    cols: columnsForSize(width, best),
+    overflow: !gridFits(count, width, height, best),
+  }
+}
+
+function measureGrid() {
+  const el = gridHost.value
+  if (!el) return
+  const styles = getComputedStyle(el)
+  const width = el.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight)
+  const height = el.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom)
+  const layout = fitStationGrid(streams.value.length, width, height)
+  cardSize.value = layout.size
+  gridCols.value = layout.cols
+  gridOverflow.value = layout.overflow
+}
 
 const currentStream = computed(() => streams.value.find((s) => s.id === playback.value.streamId))
 const displayTitle = computed(() => nowPlaying.value.title || currentStream.value?.name || 'Nothing playing')
@@ -253,8 +315,15 @@ async function setLaunchMinimized(enabled: boolean) {
   settings.value.launchMinimized = enabled
 }
 
+watch(() => streams.value.length, () => nextTick(measureGrid))
+watch(showSettings, () => nextTick(measureGrid))
+
 onMounted(async () => {
   await loadAll()
+  await nextTick()
+  gridObserver = new ResizeObserver(() => measureGrid())
+  if (gridHost.value) gridObserver.observe(gridHost.value)
+  measureGrid()
   unsubs.push(
     Events.On('playback:state', (event: WailsEvent<PlaybackState>) => {
       playback.value = event.data
@@ -269,6 +338,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  gridObserver?.disconnect()
+  gridObserver = null
   unsubs.forEach((u) => u())
 })
 </script>
@@ -364,7 +435,11 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <main class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+    <main
+      ref="gridHost"
+      class="min-h-0 flex-1 px-4 py-4 sm:px-6 sm:py-6"
+      :class="gridOverflow ? 'overflow-y-auto' : 'overflow-hidden'"
+    >
       <div v-if="loading" class="flex items-center gap-2 text-zinc-400">
         <LoaderCircle :size="iconSize" class="animate-spin" />
       </div>
@@ -376,7 +451,15 @@ onUnmounted(() => {
           <Plus :size="iconSize" />
         </button>
       </div>
-      <div v-else class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div
+        v-else
+        class="station-grid"
+        :class="gridOverflow ? 'station-grid-overflow' : 'station-grid-fit'"
+        :style="{
+          gridTemplateColumns: `repeat(${gridCols}, ${cardSize}px)`,
+          gap: CARD_GAP + 'px',
+        }"
+      >
         <article
           v-for="stream in streams"
           :key="stream.id"
@@ -386,6 +469,7 @@ onUnmounted(() => {
             editMode ? 'cursor-grab' : '',
             dragFromId === stream.id ? 'opacity-70' : '',
           ]"
+          :style="{ width: cardSize + 'px' }"
           :draggable="editMode"
           @dragstart="onCardDragStart($event, stream.id)"
           @dragover="onCardDragOver"
@@ -393,12 +477,15 @@ onUnmounted(() => {
           @dragend="onCardDragEnd"
         >
           <button class="block w-full text-left" :tabindex="editMode ? -1 : 0" @click="onCardClick(stream)">
-            <div class="relative aspect-square w-full overflow-hidden bg-zinc-900">
+            <div
+              class="relative overflow-hidden bg-zinc-900"
+              :style="{ width: cardSize + 'px', height: cardSize + 'px' }"
+            >
               <img
                 v-if="stream.imageData"
                 :src="stream.imageData"
                 :alt="stream.name"
-                class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                class="h-full w-full object-contain p-3"
               />
               <div v-else class="flex h-full items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 text-zinc-600">
                 <Music2 :size="40" />
@@ -435,7 +522,7 @@ onUnmounted(() => {
           <img
             v-if="currentStream?.imageData"
             :src="currentStream.imageData"
-            class="h-full w-full object-cover"
+            class="h-full w-full object-contain p-1"
             alt=""
           />
           <div v-else class="flex h-full items-center justify-center text-zinc-500">
@@ -538,6 +625,21 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.station-grid {
+  display: grid;
+  justify-content: center;
+  width: 100%;
+  min-height: 100%;
+}
+
+.station-grid-fit {
+  align-content: center;
+}
+
+.station-grid-overflow {
+  align-content: start;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
