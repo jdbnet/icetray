@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 OUTDIR="${OUTDIR:-dist}"
 mkdir -p "${OUTDIR}" bin
 
-LINUX_PACKAGES="gcc pkg-config libgtk-3-dev libayatana-appindicator3-dev libasound2-dev \
+LINUX_PACKAGES="gcc pkg-config libgtk-3-dev libasound2-dev \
   libwebkit2gtk-4.1-dev mingw-w64 nsis"
 
 echo "==> Installing build dependencies..."

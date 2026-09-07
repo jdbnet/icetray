@@ -10,13 +10,13 @@
 ## Features
 
 - **Modern player UI**: Stream library, artwork, volume, and now playing info
-- **Desktop system tray**: Background playback with Open Player, Play, Pause, Stop, and Quit
+- **Desktop system tray**: Background playback with Play, Pause and Stop
 - **Embedded audio engine**: Powered by `gopxl/beep` with internal buffering for network hiccups
 - **Android media session**: Kotlin `MediaSessionService` for notification, lock-screen, and Bluetooth controls
 - **Icecast metadata**: Best-effort now playing via `/admin/publicstats.json` (Icecast 2.5+) with legacy `status-json.xsl` and ICY stream fallback
-- **Stream artwork**: Upload square images stored locally on each device
+- **Stream artwork**: Upload images stored locally on each device
 - **Autoplay**: Optional playback when the app launches
-- **Headless mode (desktop)**: Terminal-only binary for servers (`--stream` flag)
+- **Headless mode**: Terminal-only binary for servers (`--stream` flag)
 
 ## Downloads
 
@@ -24,133 +24,46 @@ Get the latest build from [GitHub Releases](https://github.com/jdbnet/icetray/re
 
 | Platform | Artifact |
 |----------|----------|
-| Linux (headed) | `icetray-linux-amd64`, `icetray-linux-arm64` |
+| Linux (headed/desktop) | `icetray-linux-amd64`, `icetray-linux-arm64` |
 | Linux (headless) | `icetray-headless-linux-amd64`, `icetray-headless-linux-arm64` |
 | Windows | `icetray-windows-amd64.exe`, `icetray-windows-arm64.exe` |
 | Windows (installer) | `icetray-windows-amd64-setup.exe`, `icetray-windows-arm64-setup.exe` |
-| Android | `icetray-android.apk` |
+| Android | `icetray-android.apk` or [Google Play](https://play.google.com/store/apps/details?id=uk.co.jdbnet.icetray) |
 | Debian/Ubuntu | `icetray_*_amd64.deb`, `icetray_*_arm64.deb` |
 
-### APT (Debian/Ubuntu)
+---
+
+### Linux
+
+Install from our APT repository...
 
 ```bash
 curl -fsSL https://apt.jdbnet.co.uk/install/stable.sh | sudo bash
 sudo apt install icetray
 ```
 
-### Android
+Or for other distros...
 
-Install the release APK on your device. On first launch, allow notifications so playback controls appear while the app is in the background.
+Download the binary from [Releases](https://github.com/jdbnet/icetray/releases/latest) and run it to install. Ensure you have ```libgtk-3-0```, ```libwebkit2gtk-4.1-0``` and ```libasound2``` installed.
 
-Stream library and artwork stay in the existing `filesDir/IceTray` directory, so updates keep your saved stations.
-
-Launch with adb:
-
-```bash
-adb shell am start -n uk.co.jdbnet.icetray/com.wails.app.MainActivity
-```
-
-### Windows
-
-Use the `*-setup.exe` installer from releases. It installs IceTray under Program Files and is much less likely to trigger false positives from Windows Defender than running a loose `.exe` from Downloads.
-
-Launch on login creates a shortcut in your Startup folder (not a Registry Run key).
-
-## Linux runtime dependencies (headed)
-
-The headed desktop app needs:
-
-```bash
-sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 libasound2
-```
-
-## Headless mode
+For headless, download `icetray-headless-linux-amd64` or `icetray-headless-linux-arm64` and run with this command...
 
 ```bash
 ./icetray-headless-linux-amd64 --stream https://icecast.example.com/stream.mp3
 ```
 
-## Developer build
-
-### Desktop
-
-Requirements:
-
-- Go 1.25+
-- Node.js 20+
-- Linux: `libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `libasound2-dev`
-- [Wails v3 CLI](https://v3.wails.io/getting-started/installation/): `CGO_ENABLED=0 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16`
-
-Release Linux binaries use GTK3 (`webkit2gtk-4.1`) so Ubuntu 22.04 and Debian 12 keep working.
-
-```bash
-bash scripts/set-version.sh
-wails3 task linux:build
-```
-
-Windows installer (from Linux with nsis installed):
-
-```bash
-bash scripts/set-version.sh
-wails3 task windows:package ARCH=amd64
-wails3 task windows:package ARCH=arm64
-```
-
-Headless:
-
-```bash
-go build -tags headless -o bin/icetray-headless .
-```
-
-Or use `./build.sh` for local desktop builds.
-
 ### Android
 
-Requirements:
+Install the release APK on your device or get it on [Google Play](https://play.google.com/store/apps/details?id=uk.co.jdbnet.icetray). On first launch, allow notifications so playback controls appear while the app is in the background.
 
-- JDK 21
-- Android SDK (API 36)
-- Android NDK r28.2 (`sdkmanager 'ndk;28.2.13676358'` or `ANDROID_NDK_HOME`)
+Stream library and artwork stay in the existing `filesDir/IceTray` directory, so updates keep your saved stations.
 
-```bash
-bash scripts/ci-build-android.sh
-```
+### Windows
 
-Local debug APK:
+Use the `*-setup.exe` installer from releases.
 
-```bash
-wails3 task android:package ARCH=arm64
-```
+Launch on login creates a shortcut in your Startup folder.
 
-Signed CI builds need these GitHub Actions secrets:
+## GoStream
 
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
-
-Generate a keystore locally:
-
-```bash
-keytool -genkeypair -v \
-  -keystore icetray-release.jks \
-  -alias icetray \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000
-```
-
-Base64-encode it for the GitHub secret (Linux):
-
-```bash
-base64 -w 0 icetray-release.jks
-```
-
-On macOS:
-
-```bash
-base64 -i icetray-release.jks | tr -d '\n'
-```
-
-Paste the output into `ANDROID_KEYSTORE_BASE64`. Set the other three secrets to the passwords and alias you chose in `keytool`. Keep the `.jks` file backed up; losing it means you cannot ship updates signed with the same key.
-
+To run your own Icecast radio stream, see [GoStream](https://github.com/jdbnet/gostream)
