@@ -13,9 +13,11 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-const targetSize = 512
+const maxEdge = 512
 
-// SaveStreamImage decodes, resizes to 512x512, and saves as PNG.
+// SaveStreamImage decodes the image, scales it so the longest edge is at most
+// maxEdge, and writes a PNG. Aspect ratio is preserved. Passing both a width
+// and height to resize.Resize stretches to a square, which is what we avoid.
 func SaveStreamImage(imagesDir, streamID string, data []byte) (string, error) {
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		return "", err
@@ -33,7 +35,7 @@ func SaveStreamImage(imagesDir, streamID string, data []byte) (string, error) {
 		return "", fmt.Errorf("image too small")
 	}
 
-	resized := resize.Resize(targetSize, targetSize, img, resize.Lanczos3)
+	resized := fitImage(img, width, height)
 	filename := streamID + ".png"
 	outPath := filepath.Join(imagesDir, filename)
 
@@ -49,6 +51,16 @@ func SaveStreamImage(imagesDir, streamID string, data []byte) (string, error) {
 	}
 
 	return filename, nil
+}
+
+func fitImage(img image.Image, width, height int) image.Image {
+	if width <= maxEdge && height <= maxEdge {
+		return img
+	}
+	if width >= height {
+		return resize.Resize(maxEdge, 0, img, resize.Lanczos3)
+	}
+	return resize.Resize(0, maxEdge, img, resize.Lanczos3)
 }
 
 // DeleteStreamImage removes a stream image file if present.

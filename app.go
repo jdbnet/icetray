@@ -250,7 +250,10 @@ func (a *App) PickStreamImage(streamID string) (StreamView, error) {
 		return StreamView{}, errInvalidInput("stream not found")
 	}
 	view := StreamView{ID: s.ID, Name: s.Name, URL: s.URL, Image: s.Image}
-	view.ImageData = "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
+	saved, err := os.ReadFile(images.ImagePath(a.cfg.ImagesDir(), filename))
+	if err == nil {
+		view.ImageData = "data:image/png;base64," + base64.StdEncoding.EncodeToString(saved)
+	}
 	return view, nil
 }
 
