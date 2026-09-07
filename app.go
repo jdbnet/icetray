@@ -61,10 +61,13 @@ type App struct {
 	supervisor *stream.Supervisor
 	startupMgr startup.StartupManager
 
-	playbackMu sync.Mutex
-	metaCancel context.CancelFunc
-	nowPlaying metadata.NowPlaying
-	currentID  string
+	playbackMu    sync.Mutex
+	metaCancel    context.CancelFunc
+	nowPlaying    metadata.NowPlaying
+	currentID     string
+	casting       bool
+	castPaused    bool
+	handoffPaused bool
 }
 
 // NewApp creates the Wails app bindings.
@@ -276,7 +279,22 @@ func (a *App) playStreamLocked(id string) error {
 		return errInvalidInput("stream not found")
 	}
 
-	if a.player.IsPlaying() && a.currentID == id {
+	if a.outputPlayingLocked() && a.currentID == id {
+		return nil
+	}
+
+	if a.casting {
+		if a.currentID != id {
+			a.stopMetadataPoller()
+			a.startMetadataPoller(s.URL)
+		}
+		a.player.Stop()
+		a.supervisor.Stop()
+		_ = a.cfg.SetLastStreamID(id)
+		a.currentID = id
+		a.castPaused = false
+		a.handoffPaused = false
+		a.emitPlaybackState()
 		return nil
 	}
 
@@ -289,6 +307,8 @@ func (a *App) playStreamLocked(id string) error {
 	a.player.SetVolume(a.playbackVolume())
 	_ = a.cfg.SetLastStreamID(id)
 	a.currentID = id
+	a.castPaused = false
+	a.handoffPaused = false
 	a.startMetadataPoller(s.URL)
 	a.emitPlaybackState()
 	return nil
@@ -298,6 +318,18 @@ func (a *App) playStreamLocked(id string) error {
 func (a *App) Pause() error {
 	a.playbackMu.Lock()
 	defer a.playbackMu.Unlock()
+
+	if a.casting {
+		if a.castPaused {
+			return nil
+		}
+		a.castPaused = true
+		a.emitPlaybackState()
+		return nil
+	}
+	if a.handoffPaused {
+		return nil
+	}
 
 	if err := a.player.Pause(); err != nil {
 		return err
@@ -310,6 +342,19 @@ func (a *App) Pause() error {
 func (a *App) Resume() error {
 	a.playbackMu.Lock()
 	defer a.playbackMu.Unlock()
+
+	if a.casting {
+		if !a.castPaused {
+			return nil
+		}
+		a.castPaused = false
+		a.emitPlaybackState()
+		return nil
+	}
+	if a.handoffPaused && a.currentID != "" {
+		a.handoffPaused = false
+		return a.playStreamLocked(a.currentID)
+	}
 
 	if err := a.player.Resume(); err != nil {
 		return err
@@ -325,6 +370,8 @@ func (a *App) Stop() error {
 
 	a.stopPlaybackLocked()
 	a.currentID = ""
+	a.castPaused = false
+	a.handoffPaused = false
 	a.nowPlaying = metadata.NowPlaying{}
 	a.emitNowPlaying()
 	a.emitPlaybackState()
@@ -333,12 +380,78 @@ func (a *App) Stop() error {
 
 // GetPlaybackState returns current playback state.
 func (a *App) GetPlaybackState() PlaybackState {
+	if a.casting {
+		has := a.currentID != ""
+		return PlaybackState{
+			Playing:  has && !a.castPaused,
+			Paused:   has && a.castPaused,
+			StreamID: a.currentID,
+			Volume:   a.cfg.GetVolume(),
+		}
+	}
+	if a.handoffPaused && a.currentID != "" && !a.player.IsRunning() {
+		return PlaybackState{
+			Playing:  false,
+			Paused:   true,
+			StreamID: a.currentID,
+			Volume:   a.cfg.GetVolume(),
+		}
+	}
 	return PlaybackState{
 		Playing:  a.player.IsRunning() && !a.player.IsPaused(),
 		Paused:   a.player.IsRunning() && a.player.IsPaused(),
 		StreamID: a.currentID,
 		Volume:   a.cfg.GetVolume(),
 	}
+}
+
+func (a *App) outputPlayingLocked() bool {
+	if a.casting {
+		return a.currentID != "" && !a.castPaused
+	}
+	return a.player.IsPlaying()
+}
+
+// SetCasting switches local oto output off while a Cast session is active.
+func (a *App) SetCasting(enabled bool) {
+	a.playbackMu.Lock()
+	defer a.playbackMu.Unlock()
+	if enabled {
+		if a.casting {
+			a.emitPlaybackState()
+			return
+		}
+		a.casting = true
+		wasPaused := (a.player.IsRunning() && a.player.IsPaused()) || a.handoffPaused
+		a.handoffPaused = false
+		a.castPaused = wasPaused && a.currentID != ""
+		a.player.Stop()
+		a.supervisor.Stop()
+		if a.currentID != "" && a.metaCancel == nil {
+			if s, ok := a.cfg.GetStreamByID(a.currentID); ok {
+				a.startMetadataPoller(s.URL)
+			}
+		}
+		a.emitPlaybackState()
+		return
+	}
+	if !a.casting {
+		return
+	}
+	a.casting = false
+	paused := a.castPaused
+	a.castPaused = false
+	id := a.currentID
+	if id == "" {
+		a.emitPlaybackState()
+		return
+	}
+	if paused {
+		a.handoffPaused = true
+		a.emitPlaybackState()
+		return
+	}
+	_ = a.playStreamLocked(id)
 }
 
 // SetVolume sets volume 0-100. Android uses the device volume only.
@@ -479,11 +592,12 @@ func (a *App) playLastStreamLocked() error {
 
 // TrayPlay handles play from the system tray.
 func (a *App) TrayPlay() {
-	if a.player.IsRunning() && a.player.IsPaused() {
+	state := a.GetPlaybackState()
+	if state.Paused {
 		_ = a.Resume()
 		return
 	}
-	if a.player.IsPlaying() {
+	if state.Playing {
 		return
 	}
 

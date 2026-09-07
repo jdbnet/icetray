@@ -298,5 +298,20 @@ class PlaybackService : MediaSessionService() {
         fun applyExternalUpdate(payload: JSONObject) {
             instance?.applyPayload(payload)
         }
+
+        fun dismissForCast() {
+            val svc = instance ?: return
+            val apply = {
+                if (instance === svc) {
+                    svc.stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE)
+                    svc.stopSelf()
+                }
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                apply()
+            } else {
+                Handler(Looper.getMainLooper()).post(apply)
+            }
+        }
     }
 }

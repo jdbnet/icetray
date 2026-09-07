@@ -6,4 +6,7 @@
     <string name="pause">Pause</string>
     <string name="play_pause">Play/Pause</string>
     <string name="stop">Stop</string>
+    <string name="cast">Cast</string>
+    <string name="cast_unavailable">Google Play Services is required for Cast</string>
+    <string name="cast_load_failed">This stream could not be sent to the Cast device</string>
 </resources>

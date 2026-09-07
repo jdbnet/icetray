@@ -124,6 +124,13 @@ export function SetAutoplay(enabled: boolean): $CancellablePromise<void> {
 }
 
 /**
+ * SetCasting switches local oto output off while a Cast session is active.
+ */
+export function SetCasting(enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2439065444, enabled);
+}
+
+/**
  * SetLaunchMinimized toggles whether the player window starts hidden (desktop tray only).
  */
 export function SetLaunchMinimized(enabled: boolean): $CancellablePromise<void> {

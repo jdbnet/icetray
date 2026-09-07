@@ -3,6 +3,7 @@ package uk.co.jdbnet.icetray
 import android.content.Context
 import android.content.Intent
 import org.json.JSONObject
+import uk.co.jdbnet.icetray.cast.CastCoordinator
 import uk.co.jdbnet.icetray.playback.PlaybackService
 
 internal object PlaybackSessionHub {
@@ -12,6 +13,11 @@ internal object PlaybackSessionHub {
 
     fun dispatch(payload: JSONObject) {
         latest = payload
+        if (payload.optBoolean("casting", false)) {
+            CastCoordinator.onSessionPayload(payload)
+            PlaybackService.dismissForCast()
+            return
+        }
         PlaybackService.applyExternalUpdate(payload)
         val notification = payload.optBoolean("notification", false)
         val playing = payload.optBoolean("playing", false)

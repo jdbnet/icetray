@@ -45,6 +45,8 @@ import androidx.webkit.WebViewAssetLoader;
 
 import uk.co.jdbnet.icetray.NativeBridge;
 import uk.co.jdbnet.icetray.PlaybackSessionHub;
+import uk.co.jdbnet.icetray.cast.CastCoordinator;
+import uk.co.jdbnet.icetray.cast.CastJsBridge;
 
 import org.json.JSONObject;
 
@@ -252,11 +254,14 @@ public class MainActivity extends AppCompatActivity {
                 // Now that JS listeners are mounted, push a snapshot of the
                 // current battery / network / theme so the UI starts populated.
                 emitSystemSnapshot();
+                CastCoordinator.INSTANCE.pushJsState();
             }
         });
 
         // Add JavaScript interface for Go communication
         webView.addJavascriptInterface(new WailsJSBridge(bridge, webView), "wails");
+        webView.addJavascriptInterface(new CastJsBridge(this), "icetrayCast");
+        CastCoordinator.INSTANCE.attach(webView);
     }
 
     private void loadApplication() {
@@ -874,6 +879,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         unregisterSystemEventReceivers();
+        if (webView != null) {
+            CastCoordinator.INSTANCE.detach(webView);
+        }
         if (bridge != null) {
             bridge.shutdown();
         }

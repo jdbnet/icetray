@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  Cast,
   Check,
   ImagePlus,
   LoaderCircle,
@@ -73,6 +74,44 @@ const gridHost = ref<HTMLElement | null>(null)
 const cardSize = ref(CARD_MAX)
 const gridCols = ref(2)
 const gridOverflow = ref(false)
+const castConnected = ref(false)
+const castDeviceName = ref('')
+
+type IceTrayCastBridge = {
+  showDialog: () => void
+  isConnected: () => boolean
+  deviceName: () => string
+}
+
+function castBridge(): IceTrayCastBridge | null {
+  const w = window as Window & { icetrayCast?: IceTrayCastBridge }
+  if (!w.icetrayCast || typeof w.icetrayCast.showDialog !== 'function') {
+    return null
+  }
+  return w.icetrayCast
+}
+
+function syncCastBridgeState() {
+  const bridge = castBridge()
+  if (!bridge) return
+  try {
+    castConnected.value = !!bridge.isConnected()
+    castDeviceName.value = bridge.deviceName() || ''
+  } catch {
+    castConnected.value = false
+    castDeviceName.value = ''
+  }
+}
+
+function openCastDialog() {
+  castBridge()?.showDialog()
+}
+
+function onCastEvent(event: Event) {
+  const detail = (event as CustomEvent<{ connected?: boolean; deviceName?: string }>).detail
+  castConnected.value = !!detail?.connected
+  castDeviceName.value = detail?.deviceName || ''
+}
 
 let gridObserver: ResizeObserver | null = null
 
@@ -324,6 +363,8 @@ onMounted(async () => {
   gridObserver = new ResizeObserver(() => measureGrid())
   if (gridHost.value) gridObserver.observe(gridHost.value)
   measureGrid()
+  syncCastBridgeState()
+  window.addEventListener('icetray-cast', onCastEvent)
   unsubs.push(
     Events.On('playback:state', (event: WailsEvent<PlaybackState>) => {
       playback.value = event.data
@@ -340,6 +381,7 @@ onMounted(async () => {
 onUnmounted(() => {
   gridObserver?.disconnect()
   gridObserver = null
+  window.removeEventListener('icetray-cast', onCastEvent)
   unsubs.forEach((u) => u())
 })
 </script>
@@ -352,6 +394,17 @@ onUnmounted(() => {
         <p class="text-sm text-zinc-400">Your Icecast stations</p>
       </div>
       <div class="flex gap-2">
+        <button
+          v-if="!settings.desktop"
+          class="icon-btn"
+          :class="castConnected ? 'icon-btn-active' : ''"
+          :title="castConnected && castDeviceName ? `Casting to ${castDeviceName}` : 'Cast'"
+          :aria-label="castConnected && castDeviceName ? `Casting to ${castDeviceName}` : 'Cast'"
+          :aria-pressed="castConnected"
+          @click="openCastDialog"
+        >
+          <Cast :size="iconSize" />
+        </button>
         <button
           v-if="streams.length > 0"
           class="icon-btn"
