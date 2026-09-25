@@ -26,6 +26,13 @@ export function AddStream(name: string, url: string): $CancellablePromise<$model
 }
 
 /**
+ * ExportStreams writes streams, artwork, and portable settings to a zip file.
+ */
+export function ExportStreams(): $CancellablePromise<void> {
+    return $Call.ByID(1269233600);
+}
+
+/**
  * GetImagePath returns the filesystem path for a stream image (for tray/debug).
  */
 export function GetImagePath(filename: string): $CancellablePromise<string> {
@@ -58,6 +65,13 @@ export function GetSettings(): $CancellablePromise<$models.SettingsView> {
  */
 export function GetStreams(): $CancellablePromise<$models.StreamView[] | null> {
     return $Call.ByID(929629524);
+}
+
+/**
+ * ImportStreams loads streams from an IceTray zip backup.
+ */
+export function ImportStreams(replace: boolean): $CancellablePromise<$models.ImportStreamsResult> {
+    return $Call.ByID(1261807461, replace);
 }
 
 /**

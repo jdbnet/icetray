@@ -16,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"git.jdbnet.co.uk/jamie/icetray/config"
+	"git.jdbnet.co.uk/jamie/icetray/exportbundle"
 	"git.jdbnet.co.uk/jamie/icetray/images"
 	"git.jdbnet.co.uk/jamie/icetray/logger"
 	"git.jdbnet.co.uk/jamie/icetray/metadata"
@@ -259,6 +260,87 @@ func (a *App) PickStreamImage(streamID string) (StreamView, error) {
 		view.ImageData = "data:image/png;base64," + base64.StdEncoding.EncodeToString(saved)
 	}
 	return view, nil
+}
+
+// ImportStreamsResult reports how many streams were added from a bundle.
+type ImportStreamsResult struct {
+	Imported int `json:"imported"`
+}
+
+// ExportStreams writes streams, artwork, and portable settings to a zip file.
+func (a *App) ExportStreams() error {
+	if a.wails == nil {
+		return errInvalidInput("application not ready")
+	}
+	path, err := a.wails.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
+		Title:    "Export streams",
+		Filename: "icetray-streams.zip",
+		Filters: []application.FileFilter{
+			{DisplayName: "IceTray backup", Pattern: "*.zip"},
+		},
+	}).PromptForSingleSelection()
+	if err != nil {
+		return err
+	}
+	if path == "" {
+		return errDialogCancelled
+	}
+	if !strings.HasSuffix(strings.ToLower(path), ".zip") {
+		path += ".zip"
+	}
+
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	data := a.cfg.SnapshotForExport()
+	if err := exportbundle.Write(file, data, a.cfg.ImagesDir()); err != nil {
+		return err
+	}
+	return file.Close()
+}
+
+// ImportStreams loads streams from an IceTray zip backup.
+func (a *App) ImportStreams(replace bool) (ImportStreamsResult, error) {
+	if a.wails == nil {
+		return ImportStreamsResult{}, errInvalidInput("application not ready")
+	}
+	path, err := a.wails.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{
+		Title:          "Import streams",
+		CanChooseFiles: true,
+		Filters: []application.FileFilter{
+			{DisplayName: "IceTray backup", Pattern: "*.zip"},
+		},
+	}).PromptForSingleSelection()
+	if err != nil {
+		return ImportStreamsResult{}, err
+	}
+	if path == "" {
+		return ImportStreamsResult{}, errDialogCancelled
+	}
+
+	bundle, err := exportbundle.Read(path)
+	if err != nil {
+		return ImportStreamsResult{}, errInvalidInput(err.Error())
+	}
+
+	a.playbackMu.Lock()
+	a.stopPlaybackLocked()
+	a.currentID = ""
+	a.nowPlaying = metadata.NowPlaying{}
+	a.playbackMu.Unlock()
+
+	count, err := a.cfg.ApplyBundle(bundle, replace)
+	if err != nil {
+		return ImportStreamsResult{}, err
+	}
+
+	a.emitNowPlaying()
+	a.emitStreamsChanged()
+	a.emitPlaybackState()
+	return ImportStreamsResult{Imported: count}, nil
 }
 
 // PlayStream starts playback for a stream by ID.

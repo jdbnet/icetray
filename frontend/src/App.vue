@@ -2,6 +2,7 @@
 import {
   Cast,
   Check,
+  Download,
   ImagePlus,
   LoaderCircle,
   Music2,
@@ -12,6 +13,7 @@ import {
   Settings,
   Square,
   Trash2,
+  Upload,
   Users,
   Volume2,
   X,
@@ -19,6 +21,8 @@ import {
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   AddStream,
+  ExportStreams,
+  ImportStreams,
   GetNowPlaying,
   GetPlaybackState,
   GetSettings,
@@ -65,6 +69,25 @@ const showSettings = ref(false)
 const editMode = ref(false)
 const editing = ref<StreamView | null>(null)
 const pendingDelete = ref<StreamView | null>(null)
+const showImportConfirm = ref(false)
+const importReplace = ref(true)
+const backupMessage = ref('')
+const BACKUP_MESSAGE_MS = 5000
+let backupMessageTimer: ReturnType<typeof setTimeout> | null = null
+
+function setBackupMessage(message: string) {
+  if (backupMessageTimer) {
+    clearTimeout(backupMessageTimer)
+    backupMessageTimer = null
+  }
+  backupMessage.value = message
+  if (!message) return
+  backupMessageTimer = setTimeout(() => {
+    backupMessage.value = ''
+    backupMessageTimer = null
+  }, BACKUP_MESSAGE_MS)
+}
+
 const formName = ref('')
 const formURL = ref('')
 const formError = ref('')
@@ -361,8 +384,60 @@ async function setLaunchMinimized(enabled: boolean) {
   settings.value.launchMinimized = enabled
 }
 
+function isDialogCancelled(err: unknown): boolean {
+  const msg = (err as { message?: string })?.message ?? ''
+  return msg.toLowerCase().includes('cancel')
+}
+
+async function exportStreams() {
+  setBackupMessage('')
+  try {
+    await ExportStreams()
+    setBackupMessage('Export saved.')
+  } catch (e: unknown) {
+    if (isDialogCancelled(e)) return
+    setBackupMessage((e as { message?: string })?.message || 'Export failed')
+  }
+}
+
+function openImportConfirm() {
+  importReplace.value = true
+  setBackupMessage('')
+  showImportConfirm.value = true
+}
+
+function cancelImport() {
+  showImportConfirm.value = false
+}
+
+async function confirmImport() {
+  showImportConfirm.value = false
+  setBackupMessage('')
+  try {
+    const result = await ImportStreams(importReplace.value)
+    if (result.imported === 0) {
+      setBackupMessage(
+        importReplace.value
+          ? 'Import finished but no streams were loaded.'
+          : 'No new streams to add (URLs already present).',
+      )
+    } else {
+      setBackupMessage(`Imported ${result.imported} stream(s).`)
+    }
+    await refreshStreams()
+    await refreshPlayback()
+    await refreshSettings()
+  } catch (e: unknown) {
+    if (isDialogCancelled(e)) return
+    setBackupMessage((e as { message?: string })?.message || 'Import failed')
+  }
+}
+
 watch(() => streams.value.length, () => nextTick(measureGrid))
-watch(showSettings, () => nextTick(measureGrid))
+watch(showSettings, (open) => {
+  nextTick(measureGrid)
+  if (!open) setBackupMessage('')
+})
 
 onMounted(async () => {
   await loadAll()
@@ -386,6 +461,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (backupMessageTimer) clearTimeout(backupMessageTimer)
   gridObserver?.disconnect()
   gridObserver = null
   window.removeEventListener('icetray-cast', onCastEvent)
@@ -487,6 +563,25 @@ onUnmounted(() => {
             />
             <span class="setting-switch-track" />
           </label>
+        </div>
+        <div class="setting-row flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="setting-copy">
+            <p class="setting-title">Backup streams</p>
+            <p class="setting-desc">
+              Export or import your stations and artwork as one .zip file. Works across desktop and Android.
+            </p>
+            <p v-if="backupMessage" class="mt-2 text-sm text-emerald-300/90">{{ backupMessage }}</p>
+          </div>
+          <div class="flex shrink-0 flex-wrap gap-2">
+            <button type="button" class="text-btn gap-2" @click="exportStreams">
+              <Download :size="iconSizeSm" />
+              Export
+            </button>
+            <button type="button" class="text-btn gap-2" @click="openImportConfirm">
+              <Upload :size="iconSizeSm" />
+              Import
+            </button>
+          </div>
         </div>
         <div class="setting-row">
           <p class="setting-title">Version</p>
@@ -665,6 +760,23 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+    <div v-if="showImportConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @click.self="cancelImport">
+      <div class="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
+        <h3 class="text-lg font-semibold">Import streams</h3>
+        <p class="mt-2 text-sm text-zinc-400">
+          Choose an IceTray .zip backup. Streams with the same URL are skipped unless you replace everything.
+        </p>
+        <label class="mt-4 flex cursor-pointer items-start gap-3 text-sm text-zinc-300">
+          <input v-model="importReplace" type="checkbox" class="mt-1" />
+          <span>Replace all existing streams and portable settings (autoplay, volume)</span>
+        </label>
+        <div class="mt-6 flex justify-end gap-2">
+          <button type="button" class="text-btn" @click="cancelImport">Cancel</button>
+          <button type="button" class="text-btn text-btn-danger" @click="confirmImport">Import</button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="pendingDelete" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @click.self="cancelDelete">
       <div class="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
         <div class="flex items-center justify-between">

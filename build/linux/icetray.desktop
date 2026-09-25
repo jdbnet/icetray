@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=icetray
+Exec=icetray
+Icon=icetray
+Categories=AudioVideo;Audio;Player;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false
