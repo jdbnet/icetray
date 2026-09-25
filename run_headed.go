@@ -9,12 +9,12 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
-	"git.jdbnet.co.uk/jamie/icetray/config"
-	"git.jdbnet.co.uk/jamie/icetray/logger"
-	"git.jdbnet.co.uk/jamie/icetray/player"
-	"git.jdbnet.co.uk/jamie/icetray/startup"
-	"git.jdbnet.co.uk/jamie/icetray/stream"
-	"git.jdbnet.co.uk/jamie/icetray/tray"
+	"github.com/jdbnet/icetray/config"
+	"github.com/jdbnet/icetray/logger"
+	"github.com/jdbnet/icetray/player"
+	"github.com/jdbnet/icetray/startup"
+	"github.com/jdbnet/icetray/stream"
+	"github.com/jdbnet/icetray/tray"
 )
 
 func init() {

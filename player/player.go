@@ -13,7 +13,7 @@ import (
 	"github.com/gopxl/beep/effects"
 	"github.com/gopxl/beep/mp3"
 
-	"git.jdbnet.co.uk/jamie/icetray/logger"
+	"github.com/jdbnet/icetray/logger"
 )
 
 const (

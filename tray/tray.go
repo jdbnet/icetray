@@ -7,11 +7,11 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"git.jdbnet.co.uk/jamie/icetray/assets"
-	"git.jdbnet.co.uk/jamie/icetray/config"
-	"git.jdbnet.co.uk/jamie/icetray/logger"
-	"git.jdbnet.co.uk/jamie/icetray/player"
-	"git.jdbnet.co.uk/jamie/icetray/startup"
+	"github.com/jdbnet/icetray/assets"
+	"github.com/jdbnet/icetray/config"
+	"github.com/jdbnet/icetray/logger"
+	"github.com/jdbnet/icetray/player"
+	"github.com/jdbnet/icetray/startup"
 )
 
 // PlayerController is implemented by the Wails app for tray actions.

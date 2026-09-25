@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 
-	"git.jdbnet.co.uk/jamie/icetray/config"
-	"git.jdbnet.co.uk/jamie/icetray/logger"
-	"git.jdbnet.co.uk/jamie/icetray/player"
-	"git.jdbnet.co.uk/jamie/icetray/startup"
-	"git.jdbnet.co.uk/jamie/icetray/stream"
+	"github.com/jdbnet/icetray/config"
+	"github.com/jdbnet/icetray/logger"
+	"github.com/jdbnet/icetray/player"
+	"github.com/jdbnet/icetray/startup"
+	"github.com/jdbnet/icetray/stream"
 )
 
 // runHeaded fails with an error message because headless builds do not package the GUI tray.

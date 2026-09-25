@@ -11,12 +11,12 @@ import (
 	"runtime"
 	"syscall"
 
-	"git.jdbnet.co.uk/jamie/icetray/assets"
-	"git.jdbnet.co.uk/jamie/icetray/config"
-	"git.jdbnet.co.uk/jamie/icetray/logger"
-	"git.jdbnet.co.uk/jamie/icetray/player"
-	"git.jdbnet.co.uk/jamie/icetray/startup"
-	"git.jdbnet.co.uk/jamie/icetray/stream"
+	"github.com/jdbnet/icetray/assets"
+	"github.com/jdbnet/icetray/config"
+	"github.com/jdbnet/icetray/logger"
+	"github.com/jdbnet/icetray/player"
+	"github.com/jdbnet/icetray/startup"
+	"github.com/jdbnet/icetray/stream"
 )
 
 func main() {

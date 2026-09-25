@@ -1,4 +1,4 @@
-module git.jdbnet.co.uk/jamie/icetray
+module github.com/jdbnet/icetray
 
 go 1.26.0
 

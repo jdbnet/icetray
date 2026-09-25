@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"git.jdbnet.co.uk/jamie/icetray/images"
+	"github.com/jdbnet/icetray/images"
 )
 
 // Stream is a portable stream entry in a bundle.

@@ -12,7 +12,7 @@ import (
 	"github.com/ebitengine/oto/v3"
 	"github.com/gopxl/beep"
 
-	"git.jdbnet.co.uk/jamie/icetray/logger"
+	"github.com/jdbnet/icetray/logger"
 )
 
 const (

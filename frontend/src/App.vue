@@ -39,7 +39,7 @@ import {
   SetVolume,
   Stop,
   UpdateStream,
-} from '../bindings/git.jdbnet.co.uk/jamie/icetray/app'
+} from '../bindings/github.com/jdbnet/icetray/app'
 import type { NowPlaying, PlaybackState, SettingsView, StreamView, WailsEvent } from './types'
 import { Events } from '@wailsio/runtime'
 

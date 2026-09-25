@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"git.jdbnet.co.uk/jamie/icetray/exportbundle"
-	"git.jdbnet.co.uk/jamie/icetray/images"
+	"github.com/jdbnet/icetray/exportbundle"
+	"github.com/jdbnet/icetray/images"
 )
 
 // ApplyBundle replaces or merges streams (and portable settings) from an export bundle.

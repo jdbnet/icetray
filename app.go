@@ -15,14 +15,14 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"git.jdbnet.co.uk/jamie/icetray/config"
-	"git.jdbnet.co.uk/jamie/icetray/exportbundle"
-	"git.jdbnet.co.uk/jamie/icetray/images"
-	"git.jdbnet.co.uk/jamie/icetray/logger"
-	"git.jdbnet.co.uk/jamie/icetray/metadata"
-	"git.jdbnet.co.uk/jamie/icetray/player"
-	"git.jdbnet.co.uk/jamie/icetray/startup"
-	"git.jdbnet.co.uk/jamie/icetray/stream"
+	"github.com/jdbnet/icetray/config"
+	"github.com/jdbnet/icetray/exportbundle"
+	"github.com/jdbnet/icetray/images"
+	"github.com/jdbnet/icetray/logger"
+	"github.com/jdbnet/icetray/metadata"
+	"github.com/jdbnet/icetray/player"
+	"github.com/jdbnet/icetray/startup"
+	"github.com/jdbnet/icetray/stream"
 )
 
 // StreamView is a stream exposed to the frontend.

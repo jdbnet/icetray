@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"git.jdbnet.co.uk/jamie/icetray/logger"
-	"git.jdbnet.co.uk/jamie/icetray/player"
+	"github.com/jdbnet/icetray/logger"
+	"github.com/jdbnet/icetray/player"
 )
 
 // RingBuffer is a fixed-size circular byte buffer.
