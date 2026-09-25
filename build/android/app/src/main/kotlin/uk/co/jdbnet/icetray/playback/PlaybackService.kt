@@ -50,9 +50,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onCreate() {
-        super.onCreate()
         appContext = applicationContext
         ensureNotificationChannel()
+        super.onCreate()
         val backing = GoBackingPlayer(Looper.getMainLooper())
         player = backing
         mediaSession = MediaSession.Builder(this, backing)
@@ -151,6 +151,8 @@ class PlaybackService : MediaSessionService() {
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.playback_notification_channel))
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setContentIntent(
                 PendingIntent.getActivity(
@@ -176,8 +178,6 @@ class PlaybackService : MediaSessionService() {
     private fun ensureNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java) ?: return
-        val existing = manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID)
-        if (existing != null) return
         manager.createNotificationChannel(
             NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
@@ -287,7 +287,7 @@ class PlaybackService : MediaSessionService() {
         const val ACTION_SYNC = "uk.co.jdbnet.icetray.action.SYNC"
         const val ACTION_START = "uk.co.jdbnet.icetray.action.START"
         const val ACTION_STOP = "uk.co.jdbnet.icetray.action.STOP"
-        private const val NOTIFICATION_CHANNEL_ID = "icetray_playback"
+        private const val NOTIFICATION_CHANNEL_ID = "icetray_playback_v2"
 
         @Volatile
         var appContext: Context? = null
