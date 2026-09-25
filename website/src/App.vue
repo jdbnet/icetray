@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { Apple, Download, Monitor, Radio, Server, Smartphone, Terminal } from '@lucide/vue'
+import { Download, Terminal } from '@lucide/vue'
+import BrandMark from './components/BrandMark.vue'
+import DownloadButton from './components/DownloadButton.vue'
 import GithubIcon from './components/GithubIcon.vue'
+import StoreButton from './components/StoreButton.vue'
 import { artifactUrl, artifacts, site } from './site'
 
 const features = [
@@ -49,9 +52,15 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
           <span class="text-lg font-semibold tracking-tight">{{ site.name }}</span>
         </a>
         <nav class="flex items-center gap-5 text-sm text-zinc-400">
-          <a href="#features" class="hover:text-zinc-100 transition-colors">Features</a>
-          <a href="#how-it-works" class="hover:text-zinc-100 transition-colors">How it works</a>
-          <a href="#download" class="hover:text-zinc-100 transition-colors">Download</a>
+          <a href="#features" class="hidden hover:text-zinc-100 transition-colors md:inline">
+            Features
+          </a>
+          <a href="#how-it-works" class="hidden hover:text-zinc-100 transition-colors md:inline">
+            How it works
+          </a>
+          <a href="#download" class="hidden hover:text-zinc-100 transition-colors md:inline">
+            Download
+          </a>
           <a
             :href="site.githubUrl"
             target="_blank"
@@ -124,7 +133,7 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
           <h2 class="text-2xl font-semibold">How it works</h2>
           <div class="mt-10 grid gap-8 md:grid-cols-3">
             <div class="rounded-xl border border-zinc-800 p-6">
-              <Monitor class="text-sky-400" :size="28" />
+              <BrandMark src="/brands/windows.svg" alt="" :height="32" />
               <h3 class="mt-4 font-medium">Desktop</h3>
               <p class="mt-2 text-sm text-zinc-400">
                 Add Icecast URLs to your library, pick artwork, and control playback from the
@@ -132,7 +141,7 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
               </p>
             </div>
             <div class="rounded-xl border border-zinc-800 p-6">
-              <Smartphone class="text-sky-400" :size="28" />
+              <BrandMark src="/brands/android.svg" alt="" :height="32" />
               <h3 class="mt-4 font-medium">Android</h3>
               <p class="mt-2 text-sm text-zinc-400">
                 Same stream library on your phone with notification and lock-screen controls.
@@ -140,7 +149,7 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
               </p>
             </div>
             <div class="rounded-xl border border-zinc-800 p-6">
-              <Terminal class="text-sky-400" :size="28" />
+              <BrandMark src="/brands/tux.svg" alt="" :height="36" />
               <h3 class="mt-4 font-medium">Headless Linux</h3>
               <p class="mt-2 text-sm text-zinc-400">
                 Run without a GUI on a server or Pi. Point at a stream URL and let the embedded
@@ -171,57 +180,48 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
 
           <div class="mt-12 space-y-12">
             <div>
-              <h3 class="flex items-center gap-2 text-lg font-medium">
-                <Monitor :size="20" class="text-zinc-400" />
+              <h3 class="flex items-center gap-2.5 text-lg font-medium">
+                <BrandMark src="/brands/windows.svg" alt="" :height="22" />
                 Windows
               </h3>
-              <ul class="mt-4 space-y-2 text-sm">
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.winSetupAmd64)"
-                  >Installer (amd64)</a>
-                  <span class="text-zinc-500"> - {{ artifacts.winSetupAmd64 }}</span>
-                </li>
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.winSetupArm64)"
-                  >Installer (arm64)</a>
-                  <span class="text-zinc-500"> - {{ artifacts.winSetupArm64 }}</span>
-                </li>
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.winPortableAmd64)"
-                  >Portable executable (amd64)</a>
-                </li>
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.winPortableArm64)"
-                  >Portable executable (arm64)</a>
-                </li>
-              </ul>
+              <div class="mt-4 flex flex-wrap items-center gap-3">
+                <DownloadButton
+                  variant="primary"
+                  :href="artifactUrl(artifacts.winSetupAmd64)"
+                  label="Installer (64-bit)"
+                />
+                <DownloadButton
+                  variant="primary"
+                  :href="artifactUrl(artifacts.winSetupArm64)"
+                  label="Installer (ARM64)"
+                />
+                <DownloadButton
+                  :href="artifactUrl(artifacts.winPortableAmd64)"
+                  label="Portable .exe (64-bit)"
+                />
+                <DownloadButton
+                  :href="artifactUrl(artifacts.winPortableArm64)"
+                  label="Portable .exe (ARM64)"
+                />
+              </div>
             </div>
 
             <div>
-              <h3 class="flex items-center gap-2 text-lg font-medium">
-                <Apple :size="20" class="text-zinc-400" />
+              <h3 class="flex items-center gap-2.5 text-lg font-medium">
+                <BrandMark src="/brands/apple.svg" alt="" :height="22" img-class="invert" />
                 macOS
               </h3>
               <p class="mt-2 text-sm text-zinc-400">
                 Universal build for Apple Silicon and Intel. The zip contains
                 <code class="text-zinc-300">icetray.app</code>.
               </p>
-              <ul class="mt-4 space-y-2 text-sm">
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.macUniversalZip)"
-                  >Download {{ artifacts.macUniversalZip }}</a>
-                </li>
-              </ul>
+              <div class="mt-4 flex flex-wrap gap-3">
+                <DownloadButton
+                  variant="primary"
+                  :href="artifactUrl(artifacts.macUniversalZip)"
+                  label="Download for macOS"
+                />
+              </div>
               <ol class="mt-4 list-decimal space-y-2 pl-5 text-sm text-zinc-400">
                 <li>Unzip and move <span class="text-zinc-300">icetray.app</span> into Applications.</li>
                 <li>
@@ -237,40 +237,34 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
             </div>
 
             <div>
-              <h3 class="flex items-center gap-2 text-lg font-medium">
-                <Radio :size="20" class="text-zinc-400" />
+              <h3 class="flex items-center gap-2.5 text-lg font-medium">
+                <BrandMark src="/brands/tux.svg" alt="" :height="28" />
                 Linux (desktop)
               </h3>
               <p class="mt-2 text-sm text-zinc-400">Debian and Ubuntu via our APT repository:</p>
               <pre
                 class="mt-3 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300"
               ><code>{{ aptSnippet }}</code></pre>
-              <ul class="mt-4 space-y-2 text-sm">
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.debAmd64)"
-                  >.deb package (amd64)</a>
-                </li>
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.debArm64)"
-                  >.deb package (arm64)</a>
-                </li>
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.linuxAmd64)"
-                  >Binary (amd64)</a>
-                </li>
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.linuxArm64)"
-                  >Binary (arm64)</a>
-                </li>
-              </ul>
+              <div class="mt-4 flex flex-wrap gap-3">
+                <DownloadButton
+                  variant="primary"
+                  :href="artifactUrl(artifacts.debAmd64)"
+                  label=".deb (64-bit)"
+                />
+                <DownloadButton
+                  variant="primary"
+                  :href="artifactUrl(artifacts.debArm64)"
+                  label=".deb (ARM64)"
+                />
+                <DownloadButton
+                  :href="artifactUrl(artifacts.linuxAmd64)"
+                  label="Binary (64-bit)"
+                />
+                <DownloadButton
+                  :href="artifactUrl(artifacts.linuxArm64)"
+                  label="Binary (ARM64)"
+                />
+              </div>
               <p class="mt-3 text-sm text-zinc-500">
                 For raw binaries on other distros, install libgtk-3-0, libwebkit2gtk-4.1-0, and
                 libasound2, then run the binary to install into ~/.local.
@@ -278,57 +272,46 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
             </div>
 
             <div>
-              <h3 class="flex items-center gap-2 text-lg font-medium">
-                <Server :size="20" class="text-zinc-400" />
+              <h3 class="flex items-center gap-2.5 text-lg font-medium">
+                <BrandMark src="/brands/tux.svg" alt="" :height="28" />
+                <Terminal :size="18" class="text-zinc-500" />
                 Linux (headless)
               </h3>
               <p class="mt-2 text-sm text-zinc-400">
                 No GUI or tray. Ideal for servers and automation.
               </p>
-              <ul class="mt-4 space-y-2 text-sm">
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.headlessAmd64)"
-                  >Binary (amd64)</a>
-                </li>
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.headlessArm64)"
-                  >Binary (arm64)</a>
-                </li>
-              </ul>
+              <div class="mt-4 flex flex-wrap gap-3">
+                <DownloadButton
+                  variant="primary"
+                  :href="artifactUrl(artifacts.headlessAmd64)"
+                  label="Headless binary (64-bit)"
+                />
+                <DownloadButton
+                  variant="primary"
+                  :href="artifactUrl(artifacts.headlessArm64)"
+                  label="Headless binary (ARM64)"
+                />
+              </div>
               <pre
                 class="mt-4 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300"
               ><code>{{ headlessSnippet }}</code></pre>
             </div>
 
             <div>
-              <h3 class="flex items-center gap-2 text-lg font-medium">
-                <Smartphone :size="20" class="text-zinc-400" />
+              <h3 class="flex items-center gap-2.5 text-lg font-medium">
+                <BrandMark src="/brands/android.svg" alt="" :height="24" />
                 Android
               </h3>
-              <ul class="mt-4 space-y-2 text-sm">
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="site.playStoreUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >Google Play</a>
-                  <span class="text-zinc-500"> (recommended)</span>
-                </li>
-                <li>
-                  <a
-                    class="text-sky-400 hover:underline"
-                    :href="artifactUrl(artifacts.androidApk)"
-                  >APK download</a>
-                  <span class="text-zinc-500">
-                    - for devices without Play Store (v{{ site.version }})
-                  </span>
-                </li>
-              </ul>
+              <p class="mt-2 text-sm text-zinc-400">
+                Google Play is recommended. Use the APK on devices without the Play Store.
+              </p>
+              <div class="mt-4 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-6">
+                <StoreButton :href="site.playStoreUrl" />
+                <DownloadButton
+                  :href="artifactUrl(artifacts.androidApk)"
+                  :label="`APK (v${site.version})`"
+                />
+              </div>
             </div>
           </div>
         </div>
