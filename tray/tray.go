@@ -63,7 +63,9 @@ func (tm *TrayManager) Start() {
 	} else {
 		tm.systray.SetIcon(assets.Icon)
 	}
-	tm.systray.SetTooltip("IceTray - Internet Radio Player")
+	// Linux StatusNotifierItem Title comes from SetLabel (tooltip is unused there).
+	tm.systray.SetLabel("IceTray")
+	tm.systray.SetTooltip("IceTray")
 	tm.systray.OnClick(func() {
 		tm.app.ShowPlayer()
 	})
