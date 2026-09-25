@@ -8,7 +8,6 @@
         <!-- Edge-to-edge: insets applied in MainActivity (not legacy windowFullscreen). -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/wails_background</item>
-        <item name="android:navigationBarContrastEnforced">false</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         <!-- Window background -->
         <item name="android:windowBackground">@color/wails_background</item>

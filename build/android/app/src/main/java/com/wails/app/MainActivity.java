@@ -844,6 +844,9 @@ public class MainActivity extends AppCompatActivity {
     private void applySafeAreaInsets() {
         View root = findViewById(R.id.main_container);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
         ViewCompat.setOnApplyWindowInsetsListener(root, (view, windowInsets) -> {
             Insets insets = windowInsets.getInsets(
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
