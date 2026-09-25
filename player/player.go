@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gopxl/beep"
@@ -34,11 +36,16 @@ func uiVolumeToEffect(vol int) (volume float64, silent bool) {
 	return math.Log2(gain), false
 }
 
+// SourceAttachMinBytes is how much stream data to accumulate before attaching the decoder.
+const SourceAttachMinBytes = preBufferMinBytes
+
 // StreamBuffer interface allows player to consume RingBuffer without direct package dependency.
 type StreamBuffer interface {
 	io.ReadCloser
 	AvailableData() int
 	IsClosed() bool
+	Peek(p []byte) (int, error)
+	Discard(n int) error
 }
 
 // Player manages the beep-based audio decoding and playback lifecycle.
@@ -55,6 +62,7 @@ type Player struct {
 	ctrl           *beep.Ctrl
 	volumeEffect   *effects.Volume
 	stateListeners []func()
+	sourceWorkers  atomic.Int32
 }
 
 // NewPlayer creates a new Player instance. Speaker output is initialised lazily on first playback.
@@ -112,11 +120,17 @@ func (p *Player) Play(streamURL string) error {
 	return nil
 }
 
+// SourceAttachActive reports whether a playSource goroutine is still running.
+func (p *Player) SourceAttachActive() bool {
+	return p.sourceWorkers.Load() > 0
+}
+
 // SetSource starts playback from a new buffer source.
 func (p *Player) SetSource(buf StreamBuffer) {
 	p.mu.Lock()
 	if !p.isRunning {
 		p.mu.Unlock()
+		logger.Log("SetSource: ignored because player is not running")
 		return
 	}
 
@@ -162,85 +176,144 @@ func (p *Player) stopActiveStreamLocked() {
 	}
 }
 
-// playSource decodes and plays the audio source.
-func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) {
+func (p *Player) sourceStale(gen uint64) bool {
+	p.mu.RLock()
+	stale := p.sourceGen != gen || !p.isRunning
+	p.mu.RUnlock()
+	return stale
+}
+
+func attachCancelled(cancel <-chan struct{}, err error) bool {
+	if err != nil && strings.Contains(err.Error(), "cancelled") {
+		return true
+	}
+	select {
+	case <-cancel:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *Player) waitStreamPrebuffer(buf StreamBuffer, cancel <-chan struct{}) bool {
 	targetBytes := preBufferTargetBytes
 	minBytes := preBufferMinBytes
-	logger.Log(fmt.Sprintf("playSource: waiting for buffer to fill to %d bytes...", targetBytes))
+	var partialDeadline time.Time
 
-	deadline := time.Now().Add(preBufferMaxWait)
 	for {
 		select {
 		case <-cancel:
-			return
+			return false
 		default:
 		}
 
 		available := buf.AvailableData()
 		if available >= targetBytes {
-			break
+			return true
 		}
 
 		if buf.IsClosed() {
 			if available < minBytes {
 				logger.Log("playSource: buffer closed before reaching minimum size")
-				return
+				return false
 			}
-			logger.Log("playSource: buffer closed, starting with available data")
-			break
+			return true
 		}
 
-		if time.Now().After(deadline) {
-			if available >= minBytes {
-				logger.Log(fmt.Sprintf("playSource: max wait reached, starting with %d bytes", available))
-				break
-			}
-			if available > 0 {
-				logger.Log(fmt.Sprintf("playSource: max wait reached with %d bytes, starting anyway", available))
-				break
-			}
-			logger.Log("playSource: max wait reached with no stream data")
-			return
+		if available == 0 {
+			time.Sleep(preBufferPollInterval)
+			continue
+		}
+
+		if partialDeadline.IsZero() {
+			partialDeadline = time.Now().Add(preBufferMaxWait)
+		}
+		if time.Now().After(partialDeadline) {
+			logger.Log(fmt.Sprintf("playSource: max wait reached, starting with %d bytes", available))
+			return true
 		}
 
 		time.Sleep(preBufferPollInterval)
 	}
+}
 
-	select {
-	case <-cancel:
-		return
-	default:
+// playSource decodes and plays the audio source.
+func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) {
+	p.sourceWorkers.Add(1)
+	defer p.sourceWorkers.Add(-1)
+
+	for {
+		if attachCancelled(cancel, nil) || p.sourceStale(gen) {
+			return
+		}
+
+		logger.Log(fmt.Sprintf("playSource: waiting for buffer (have %d bytes)...", buf.AvailableData()))
+		if !p.waitStreamPrebuffer(buf, cancel) {
+			return
+		}
+
+		if attachCancelled(cancel, nil) || p.sourceStale(gen) {
+			return
+		}
+
+		logger.Log(fmt.Sprintf("playSource: decoding (%d bytes available)...", buf.AvailableData()))
+
+		var streamer beep.StreamSeekCloser
+		var format beep.Format
+		decoded := false
+		for {
+			if attachCancelled(cancel, nil) || p.sourceStale(gen) {
+				return
+			}
+
+			synced, err := openMP3Stream(buf, cancel)
+			if err != nil {
+				if attachCancelled(cancel, err) {
+					return
+				}
+				logger.LogError("playSource: mp3 sync waiting", err)
+				time.Sleep(preBufferPollInterval)
+				continue
+			}
+
+			s, f, err := mp3.Decode(io.NopCloser(synced))
+			if err != nil {
+				logger.LogError("playSource: decode failed, resyncing", err)
+				_ = buf.Discard(4096)
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			streamer = s
+			format = f
+			decoded = true
+			break
+		}
+		if !decoded {
+			continue
+		}
+
+		stopFill, ok := p.beginSpeakerPlayback(streamer, format, cancel, gen)
+		if ok {
+			if stopFill != nil {
+				defer stopFill()
+			}
+			defer streamer.Close()
+			<-cancel
+			logger.Log("playSource: playback goroutine exiting")
+			return
+		}
+		streamer.Close()
+		_ = buf.Discard(4096)
+		time.Sleep(50 * time.Millisecond)
 	}
+}
 
-	logger.Log(fmt.Sprintf("playSource: buffer filled (%d bytes), decoding...", buf.AvailableData()))
-
-	p.mu.RLock()
-	stale := p.sourceGen != gen || !p.isRunning
-	p.mu.RUnlock()
-	if stale {
-		return
-	}
-
-	synced, err := newSyncedMP3Reader(buf)
-	if err != nil {
-		logger.LogError("playSource: failed to find MP3 frame sync", err)
-		return
-	}
-
-	// Decode the MP3 stream
-	streamer, format, err := mp3.Decode(io.NopCloser(synced))
-	if err != nil {
-		logger.LogError("playSource: failed to decode stream", err)
-		return
-	}
-	defer streamer.Close()
-
+func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format beep.Format, cancel chan struct{}, gen uint64) (func(), bool) {
 	if err := p.ensureSpeaker(); err != nil {
 		logger.LogError("playSource: speaker not available", err)
-		return
+		return nil, false
 	}
 
-	// 3. Setup volume effect
 	p.mu.Lock()
 	vol := p.volume
 	p.mu.Unlock()
@@ -253,22 +326,27 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) 
 	volumeEffect.Volume = beepVol
 	volumeEffect.Silent = silent
 
-	// 4. Resample to the speaker rate when needed
 	var output beep.Streamer = volumeEffect
 	if format.SampleRate != speakerSampleRate {
 		output = beep.Resample(4, format.SampleRate, speakerSampleRate, volumeEffect)
 	}
+	output = newFadeIn(output, speakerSampleRate, 150*time.Millisecond)
 	output = bufferPlayback(output)
+
+	var stopFill func()
 	if buffered, ok := output.(playbackBuffer); ok {
-		defer buffered.stopFill()
-		buffered.waitReady(speakerSampleRate.N(2*time.Second), 4*time.Second)
+		waitPlaybackReady(buffered, cancel)
+		stopFill = buffered.stopFill
 	}
 
-	// 5. Wrap in Ctrl to support Pause/Resume
+	if attachCancelled(cancel, nil) || p.sourceStale(gen) {
+		return nil, false
+	}
+
 	p.mu.Lock()
 	if p.sourceGen != gen || !p.isRunning {
 		p.mu.Unlock()
-		return
+		return nil, false
 	}
 	isPaused := p.isPaused
 	ctrl := &beep.Ctrl{
@@ -286,10 +364,7 @@ func (p *Player) playSource(buf StreamBuffer, cancel chan struct{}, gen uint64) 
 	p.audioActive = true
 	p.mu.Unlock()
 	p.notifyStateChange()
-
-	// 7. Wait until finished or cancelled
-	<-cancel
-	logger.Log("playSource: playback goroutine exiting")
+	return stopFill, true
 }
 
 // Pause pauses the playback.

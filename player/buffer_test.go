@@ -50,7 +50,7 @@ func TestAheadStreamerCopiesDecodedPCM(t *testing.T) {
 	defer ahead.stopFill()
 
 	close(src.release)
-	ahead.waitReady(32, time.Second)
+	ahead.waitReady(32, time.Second, nil)
 
 	samples := make([][2]float64, 32)
 	n, ok := ahead.Stream(samples)

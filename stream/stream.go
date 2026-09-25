@@ -175,6 +175,59 @@ func (rb *RingBuffer) availableData() int {
 	return rb.size - rb.readPos + rb.writePos
 }
 
+// Peek copies up to len(p) bytes from the read position without consuming them.
+func (rb *RingBuffer) Peek(p []byte) (int, error) {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	if rb.isEmpty() {
+		return 0, nil
+	}
+
+	available := rb.availableData()
+	toRead := len(p)
+	if toRead > available {
+		toRead = available
+	}
+	if toRead == 0 {
+		return 0, nil
+	}
+
+	if rb.readPos+toRead <= rb.size {
+		copy(p[:toRead], rb.buffer[rb.readPos:rb.readPos+toRead])
+	} else {
+		firstPart := rb.size - rb.readPos
+		copy(p[:firstPart], rb.buffer[rb.readPos:])
+		copy(p[firstPart:toRead], rb.buffer[0:toRead-firstPart])
+	}
+	return toRead, nil
+}
+
+// Discard advances the read position by up to n bytes.
+func (rb *RingBuffer) Discard(n int) error {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	if n <= 0 {
+		return nil
+	}
+	available := rb.availableData()
+	if n > available {
+		n = available
+	}
+	if n == 0 {
+		return nil
+	}
+
+	if rb.readPos+n <= rb.size {
+		rb.readPos += n
+	} else {
+		rb.readPos = n - (rb.size - rb.readPos)
+	}
+	rb.notFull.Broadcast()
+	return nil
+}
+
 // StreamReader reads from an HTTP stream into a ring buffer.
 type StreamReader struct {
 	url        string
@@ -218,11 +271,9 @@ func (sr *StreamReader) Start() error {
 	sr.connected.Store(true)
 	defer sr.connected.Store(false)
 
-	if sr.onConnect != nil {
-		sr.onConnect()
-	}
-
 	defer sr.buffer.Close()
+
+	sourceAttached := false
 
 	// Read from the response body into the ring buffer
 	buf := make([]byte, 4096)
@@ -237,6 +288,10 @@ func (sr *StreamReader) Start() error {
 		if n > 0 {
 			if err := sr.buffer.Write(buf[:n]); err != nil {
 				return err
+			}
+			if !sourceAttached && sr.onConnect != nil && sr.buffer.AvailableData() >= player.SourceAttachMinBytes {
+				sourceAttached = true
+				sr.onConnect()
 			}
 		}
 		if err != nil {
@@ -335,7 +390,7 @@ func (s *Supervisor) supervise(stopChan chan struct{}, session uint64) {
 		url := s.streamURL
 		s.mu.RUnlock()
 
-		err := s.attemptConnection(url, session)
+		err := s.attemptConnection(url, session, stopChan)
 		if err != nil {
 			logger.LogError("Stream connection lost", err)
 		}
@@ -354,7 +409,7 @@ func (s *Supervisor) supervise(stopChan chan struct{}, session uint64) {
 }
 
 // attemptConnection tries to connect and read from the stream.
-func (s *Supervisor) attemptConnection(url string, session uint64) error {
+func (s *Supervisor) attemptConnection(url string, session uint64, stopChan chan struct{}) error {
 	reader := NewStreamReader(url, 1024*1024) // 1MB buffer
 	reader.onConnect = func() {
 		if s.session.Load() != session {
@@ -367,6 +422,10 @@ func (s *Supervisor) attemptConnection(url string, session uint64) error {
 	s.mu.Lock()
 	s.reader = reader
 	s.mu.Unlock()
+
+	attachStop := make(chan struct{})
+	defer close(attachStop)
+	go s.monitorSourceAttach(attachStop, stopChan, session, reader)
 
 	logger.Log("Attempting to connect to stream: " + url)
 	err := reader.Start()
@@ -383,6 +442,39 @@ func (s *Supervisor) attemptConnection(url string, session uint64) error {
 	s.mu.Unlock()
 
 	return err
+}
+
+// monitorSourceAttach re-attaches the decoder if the HTTP stream is flowing but playback never started.
+func (s *Supervisor) monitorSourceAttach(attachStop chan struct{}, stopChan chan struct{}, session uint64, reader *StreamReader) {
+	ticker := time.NewTicker(1500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-attachStop:
+			return
+		case <-stopChan:
+			return
+		case <-ticker.C:
+			if s.session.Load() != session {
+				return
+			}
+			if !s.player.IsRunning() {
+				return
+			}
+			if s.player.IsPlaying() {
+				return
+			}
+			if s.player.SourceAttachActive() {
+				continue
+			}
+			if reader.GetBuffer().AvailableData() < player.SourceAttachMinBytes {
+				continue
+			}
+			logger.Log("monitorSourceAttach: re-attaching decoder to live stream buffer")
+			s.player.SetSource(reader.GetBuffer())
+		}
+	}
 }
 
 // Stop stops the supervisor and closes the stream.

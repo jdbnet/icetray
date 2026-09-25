@@ -7,8 +7,14 @@ import (
 	"github.com/gopxl/beep"
 )
 
+const (
+	playbackAheadDuration = 250 * time.Millisecond
+	playbackReadyDuration = 120 * time.Millisecond
+	playbackReadyTimeout  = 3 * time.Second
+)
+
 type playbackBuffer interface {
-	waitReady(min int, timeout time.Duration)
+	waitReady(min int, timeout time.Duration, cancel <-chan struct{})
 	stopFill()
 }
 
@@ -96,9 +102,14 @@ func (a *aheadStreamer) stopFill() {
 	a.mu.Unlock()
 }
 
-func (a *aheadStreamer) waitReady(min int, timeout time.Duration) {
+func (a *aheadStreamer) waitReady(min int, timeout time.Duration, cancel <-chan struct{}) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
+		select {
+		case <-cancel:
+			return
+		default:
+		}
 		a.mu.Lock()
 		ready := len(a.buf) >= min || a.eof || a.closed
 		a.mu.Unlock()
@@ -107,4 +118,20 @@ func (a *aheadStreamer) waitReady(min int, timeout time.Duration) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+}
+
+func bufferPlayback(src beep.Streamer) beep.Streamer {
+	capacity := speakerSampleRate.N(playbackAheadDuration)
+	if capacity < 4096 {
+		capacity = 4096
+	}
+	return newAheadStreamer(src, capacity)
+}
+
+func waitPlaybackReady(buffered playbackBuffer, cancel <-chan struct{}) {
+	min := speakerSampleRate.N(playbackReadyDuration)
+	if min < 2048 {
+		min = 2048
+	}
+	buffered.waitReady(min, playbackReadyTimeout, cancel)
 }
