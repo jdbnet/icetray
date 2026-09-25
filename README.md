@@ -47,6 +47,7 @@ VERSION=1.2.3 task website:docker
 | Linux (headless) | `icetray-headless-linux-amd64`, `icetray-headless-linux-arm64` |
 | Windows | `icetray-windows-amd64.exe`, `icetray-windows-arm64.exe` |
 | Windows (installer) | `icetray-windows-amd64-setup.exe`, `icetray-windows-arm64-setup.exe` |
+| macOS | `icetray-macos-universal.zip` (`icetray.app`, universal arm64 + amd64) |
 | Android | `icetray-android.apk` or [Google Play](https://play.google.com/store/apps/details?id=uk.co.jdbnet.icetray) |
 | Debian/Ubuntu | `icetray_*_amd64.deb`, `icetray_*_arm64.deb` |
 
@@ -82,6 +83,22 @@ Stream library and artwork stay in the existing `filesDir/IceTray` directory, so
 Use the `*-setup.exe` installer from releases.
 
 Launch on login creates a shortcut in your Startup folder.
+
+### macOS
+
+Download `icetray-macos-universal.zip` from [Releases](https://github.com/jdbnet/icetray/releases/latest), unzip, and move **icetray.app** into **Applications**.
+
+First launch: right-click **icetray** and choose **Open**, or allow the app in **System Settings → Privacy & Security** if Gatekeeper blocks it. If needed:
+
+```bash
+xattr -dr com.apple.quarantine ~/Applications/icetray.app
+```
+
+Build locally on a Mac:
+
+```bash
+wails3 task darwin:package:universal
+```
 
 ## GoStream
 

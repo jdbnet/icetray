@@ -28,4 +28,5 @@ export const artifacts = {
   debAmd64: `icetray_${version}_amd64.deb`,
   debArm64: `icetray_${version}_arm64.deb`,
   androidApk: 'icetray-android.apk',
+  macUniversalZip: 'icetray-macos-universal.zip',
 }

@@ -144,6 +144,35 @@ jobs:
             dist/icetray-android.apk
             dist/icetray-android.aab
 
+  build-macos:
+    needs: version
+    if: needs.version.outputs.version != ''
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.version.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build macOS universal app
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bash scripts/ci-build-macos.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-macos
+          path: dist/icetray-macos-universal.zip
+
   build-website:
     needs: version
     if: needs.version.outputs.version != ''
@@ -188,7 +217,7 @@ jobs:
           docker push "${IMAGE}:latest"
 
   publish:
-    needs: [version, build-amd64, build-arm64, build-android]
+    needs: [version, build-amd64, build-arm64, build-android, build-macos]
     if: needs.version.outputs.version != ''
     runs-on: ubuntu-latest
     steps:
@@ -229,6 +258,7 @@ jobs:
             dist/icetray-android.aab
             dist/icetray_*_amd64.deb
             dist/icetray_*_arm64.deb
+            dist/icetray-macos-universal.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

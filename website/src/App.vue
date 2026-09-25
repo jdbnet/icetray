@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, Monitor, Radio, Server, Smartphone, Terminal } from '@lucide/vue'
+import { Apple, Download, Monitor, Radio, Server, Smartphone, Terminal } from '@lucide/vue'
 import GithubIcon from './components/GithubIcon.vue'
 import { artifactUrl, artifacts, site } from './site'
 
@@ -203,6 +203,37 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
                   >Portable executable (arm64)</a>
                 </li>
               </ul>
+            </div>
+
+            <div>
+              <h3 class="flex items-center gap-2 text-lg font-medium">
+                <Apple :size="20" class="text-zinc-400" />
+                macOS
+              </h3>
+              <p class="mt-2 text-sm text-zinc-400">
+                Universal build for Apple Silicon and Intel. The zip contains
+                <code class="text-zinc-300">icetray.app</code>.
+              </p>
+              <ul class="mt-4 space-y-2 text-sm">
+                <li>
+                  <a
+                    class="text-sky-400 hover:underline"
+                    :href="artifactUrl(artifacts.macUniversalZip)"
+                  >Download {{ artifacts.macUniversalZip }}</a>
+                </li>
+              </ul>
+              <ol class="mt-4 list-decimal space-y-2 pl-5 text-sm text-zinc-400">
+                <li>Unzip and move <span class="text-zinc-300">icetray.app</span> into Applications.</li>
+                <li>
+                  First launch: right-click the app and choose <span class="text-zinc-300">Open</span>,
+                  or allow it under Privacy &amp; Security if macOS blocks an unsigned app.
+                </li>
+                <li>
+                  If the app still will not open, remove quarantine:
+                  <code class="block mt-1 rounded bg-zinc-950 px-2 py-1 text-xs text-zinc-300"
+                  >xattr -dr com.apple.quarantine ~/Applications/icetray.app</code>
+                </li>
+              </ol>
             </div>
 
             <div>

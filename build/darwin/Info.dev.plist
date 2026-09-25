@@ -6,7 +6,7 @@
         <key>CFBundleName</key>
             <string>IceTray</string>
         <key>CFBundleExecutable</key>
-            <string>icetray-scaffold</string>
+            <string>icetray</string>
         <key>CFBundleIdentifier</key>
             <string>uk.co.jdbnet.icetray</string>
         <key>CFBundleVersion</key>
