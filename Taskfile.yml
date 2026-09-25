@@ -66,3 +66,18 @@ tasks:
     summary: Builds and runs the Docker image
     cmds:
       - task: common:run:docker
+
+  website:build:
+    summary: Builds the static marketing site (uses VERSION or VERSION file)
+    cmds:
+      - bash scripts/ci-build-website.sh
+
+  website:docker:
+    summary: Builds the nginx Docker image for the marketing site
+    cmds:
+      - docker build -f website/Dockerfile --build-arg VERSION={{.VERSION}} -t ghcr.io/jdbnet/icetray-website:{{.VERSION}} .
+
+  website:run:
+    summary: Runs the marketing site container on port 8080
+    cmds:
+      - docker run --rm -p 8080:80 ghcr.io/jdbnet/icetray-website:{{.VERSION}}

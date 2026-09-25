@@ -22,6 +22,25 @@
 
 Get the latest build from [GitHub Releases](https://github.com/jdbnet/icetray/releases/latest).
 
+The [marketing site](https://github.com/jdbnet/icetray/tree/main/website) lists pinned download links for each release. CI publishes it as an nginx container:
+
+```bash
+docker run --rm -p 8080:80 ghcr.io/jdbnet/icetray-website:latest
+```
+
+Build the site locally (uses `VERSION` or the `VERSION` file):
+
+```bash
+task website:build
+cd website && npm run preview
+```
+
+Build the Docker image:
+
+```bash
+VERSION=1.2.3 task website:docker
+```
+
 | Platform | Artifact |
 |----------|----------|
 | Linux (headed/desktop) | `icetray-linux-amd64`, `icetray-linux-arm64` |

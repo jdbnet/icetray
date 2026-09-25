@@ -144,6 +144,49 @@ jobs:
             dist/icetray-android.apk
             dist/icetray-android.aab
 
+  build-website:
+    needs: version
+    if: needs.version.outputs.version != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.version.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Build marketing website
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bash scripts/ci-build-website.sh
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push website image
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          IMAGE="ghcr.io/jdbnet/icetray-website"
+          docker build -f website/Dockerfile \
+            --build-arg VERSION="${VERSION}" \
+            -t "${IMAGE}:v${VERSION}" \
+            -t "${IMAGE}:latest" \
+            .
+          docker push "${IMAGE}:v${VERSION}"
+          docker push "${IMAGE}:latest"
+
   publish:
     needs: [version, build-amd64, build-arm64, build-android]
     if: needs.version.outputs.version != ''

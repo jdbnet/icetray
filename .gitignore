@@ -3,6 +3,8 @@ bin/
 dist/
 arm64-libs/
 frontend/node_modules/
+website/node_modules/
+website/dist/
 frontend/dist/
 frontend/wailsjs/
 *.jks
