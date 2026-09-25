@@ -9,6 +9,7 @@ export interface StreamView {
 export interface PlaybackState {
   playing: boolean
   paused: boolean
+  loading: boolean
   streamId: string
   volume: number
 }

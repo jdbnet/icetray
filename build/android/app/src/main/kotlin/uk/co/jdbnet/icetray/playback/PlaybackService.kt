@@ -123,16 +123,18 @@ class PlaybackService : MediaSessionService() {
     private fun applyPayload(payload: JSONObject) {
         val playing = payload.optBoolean("playing", false)
         val paused = payload.optBoolean("paused", false)
+        val loading = payload.optBoolean("loading", false)
         val apply = {
             player?.applySession(
                 playing = playing,
                 paused = paused,
+                loading = loading,
                 title = payload.optString("title"),
                 artist = payload.optString("artist"),
                 artworkPath = payload.optString("artworkPath").takeIf { it.isNotBlank() },
                 streamId = payload.optString("streamId"),
             )
-            if (!playing && !paused) {
+            if (!playing && !paused && !loading) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }

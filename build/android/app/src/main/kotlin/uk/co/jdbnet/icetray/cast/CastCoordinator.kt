@@ -127,11 +127,12 @@ object CastCoordinator {
         val streamUrl = payload.optString("streamUrl")
         val playing = payload.optBoolean("playing", false)
         val paused = payload.optBoolean("paused", false)
+        val loading = payload.optBoolean("loading", false)
         val title = payload.optString("title")
         val artist = payload.optString("artist")
 
         if (streamUrl.isBlank()) {
-            if (!playing && !paused) {
+            if (!playing && !paused && !loading) {
                 lastLoadedUrl = null
                 applyingRemote.set(true)
                 client.stop()

@@ -108,6 +108,7 @@ func (p *Player) Play(streamURL string) error {
 	p.isPaused = false
 	p.audioActive = false
 	logger.Log("Play: player running state set for stream " + streamURL)
+	go p.notifyStateChange()
 	return nil
 }
 
@@ -392,6 +393,13 @@ func (p *Player) IsPlaying() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.isRunning && !p.isPaused && p.audioActive
+}
+
+// IsBuffering returns whether playback is starting but audio is not active yet.
+func (p *Player) IsBuffering() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.isRunning && !p.isPaused && !p.audioActive
 }
 
 // Close stops the player and cleans up resources.

@@ -17,6 +17,7 @@ import java.io.File
 class GoBackingPlayer(looper: Looper) : SimpleBasePlayer(looper) {
     private var playing = false
     private var paused = false
+    private var loading = false
     private var title = "IceTray"
     private var artist = "IceTray"
     private var artworkUri: Uri? = null
@@ -25,6 +26,7 @@ class GoBackingPlayer(looper: Looper) : SimpleBasePlayer(looper) {
     fun applySession(
         playing: Boolean,
         paused: Boolean,
+        loading: Boolean,
         title: String,
         artist: String,
         artworkPath: String?,
@@ -32,6 +34,7 @@ class GoBackingPlayer(looper: Looper) : SimpleBasePlayer(looper) {
     ) {
         this.playing = playing
         this.paused = paused
+        this.loading = loading
         this.title = title.ifBlank { "IceTray" }
         this.artist = artist.ifBlank { "IceTray" }
         this.artworkUri = artworkPath?.takeIf { it.isNotBlank() }?.let { Uri.fromFile(File(it)) }
@@ -40,7 +43,13 @@ class GoBackingPlayer(looper: Looper) : SimpleBasePlayer(looper) {
     }
 
     override fun getState(): State {
-        val playbackState = if (playing || paused) Player.STATE_READY else Player.STATE_IDLE
+        val playbackState = when {
+            playing && !paused -> Player.STATE_READY
+            paused -> Player.STATE_READY
+            loading -> Player.STATE_BUFFERING
+            else -> Player.STATE_IDLE
+        }
+        val playWhenReady = playing || loading
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
             .setDisplayTitle(title)
@@ -71,9 +80,9 @@ class GoBackingPlayer(looper: Looper) : SimpleBasePlayer(looper) {
             .build()
         val builder = State.Builder()
             .setAvailableCommands(commands)
-            .setPlayWhenReady(playing, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
+            .setPlayWhenReady(playWhenReady, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
             .setPlaybackState(playbackState)
-        if (playing || paused) {
+        if (playing || paused || loading) {
             builder.setPlaylist(listOf(itemData))
         }
         return builder.build()

@@ -22,7 +22,8 @@ internal object PlaybackSessionHub {
         val notification = payload.optBoolean("notification", false)
         val playing = payload.optBoolean("playing", false)
         val paused = payload.optBoolean("paused", false)
-        if (notification && (playing || paused) && PlaybackService.instance == null) {
+        val loading = payload.optBoolean("loading", false)
+        if (notification && (playing || paused || loading) && PlaybackService.instance == null) {
             val context = PlaybackService.appContext ?: return
             val intent = Intent(context, PlaybackService::class.java).apply {
                 action = PlaybackService.ACTION_START

@@ -117,6 +117,7 @@ import (
 type androidSessionPayload struct {
 	Playing      bool   `json:"playing"`
 	Paused       bool   `json:"paused"`
+	Loading      bool   `json:"loading"`
 	StreamID     string `json:"streamId"`
 	StreamURL    string `json:"streamUrl"`
 	Volume       int    `json:"volume"`
@@ -178,13 +179,14 @@ func pushAndroidSession(a *App, state PlaybackState, _ any) {
 	payload := androidSessionPayload{
 		Playing:      playing,
 		Paused:       state.Paused,
+		Loading:      state.Loading,
 		StreamID:     state.StreamID,
 		StreamURL:    streamURL,
 		Volume:       state.Volume,
 		Title:        title,
 		Artist:       artist,
 		ArtworkPath:  a.sessionArtworkPath(),
-		Notification: !a.casting && (playing || state.Paused),
+		Notification: !a.casting && a.currentID != "" && (playing || state.Paused || state.Loading),
 		Casting:      a.casting,
 	}
 	data, err := json.Marshal(payload)

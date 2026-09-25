@@ -37,6 +37,7 @@ type StreamView struct {
 type PlaybackState struct {
 	Playing  bool   `json:"playing"`
 	Paused   bool   `json:"paused"`
+	Loading  bool   `json:"loading"`
 	StreamID string `json:"streamId"`
 	Volume   int    `json:"volume"`
 }
@@ -385,6 +386,7 @@ func (a *App) GetPlaybackState() PlaybackState {
 		return PlaybackState{
 			Playing:  has && !a.castPaused,
 			Paused:   has && a.castPaused,
+			Loading:  false,
 			StreamID: a.currentID,
 			Volume:   a.cfg.GetVolume(),
 		}
@@ -393,13 +395,15 @@ func (a *App) GetPlaybackState() PlaybackState {
 		return PlaybackState{
 			Playing:  false,
 			Paused:   true,
+			Loading:  false,
 			StreamID: a.currentID,
 			Volume:   a.cfg.GetVolume(),
 		}
 	}
 	return PlaybackState{
-		Playing:  a.player.IsRunning() && !a.player.IsPaused(),
+		Playing:  a.player.IsPlaying(),
 		Paused:   a.player.IsRunning() && a.player.IsPaused(),
+		Loading:  a.player.IsBuffering(),
 		StreamID: a.currentID,
 		Volume:   a.cfg.GetVolume(),
 	}

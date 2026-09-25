@@ -34,6 +34,27 @@ func TestIsPlayingReflectsAudioOutput(t *testing.T) {
 	}
 }
 
+func TestIsBufferingBeforeAudioActive(t *testing.T) {
+	p := &Player{
+		isRunning:   true,
+		isPaused:    false,
+		audioActive: false,
+	}
+	if !p.IsBuffering() {
+		t.Fatal("expected buffering while running without audio")
+	}
+	if p.IsPlaying() {
+		t.Fatal("expected not playing before audio is active")
+	}
+
+	p.mu.Lock()
+	p.audioActive = true
+	p.mu.Unlock()
+	if p.IsBuffering() {
+		t.Fatal("expected not buffering when audio is active")
+	}
+}
+
 func TestStateChangeListeners(t *testing.T) {
 	p := &Player{speakerReady: true}
 	called := false

@@ -49,7 +49,7 @@ const CARD_GAP = 16
 const CARD_TITLE = 56
 
 const streams = ref<StreamView[]>([])
-const playback = ref<PlaybackState>({ playing: false, paused: false, streamId: '', volume: 80 })
+const playback = ref<PlaybackState>({ playing: false, paused: false, loading: false, streamId: '', volume: 80 })
 const settings = ref<SettingsView>({
   autoplay: false,
   launchOnLogin: false,
@@ -169,6 +169,7 @@ function measureGrid() {
 const currentStream = computed(() => streams.value.find((s) => s.id === playback.value.streamId))
 const displayTitle = computed(() => nowPlaying.value.title || currentStream.value?.name || 'Nothing playing')
 const displaySubtitle = computed(() => {
+  if (playback.value.loading) return 'Connecting…'
   if (nowPlaying.value.station && nowPlaying.value.title) return nowPlaying.value.station
   if (nowPlaying.value.genre) return nowPlaying.value.genre
   return currentStream.value?.url || 'Select a stream to begin'
@@ -315,6 +316,12 @@ async function play(stream: StreamView) {
 }
 
 async function togglePlay() {
+  if (playback.value.loading) {
+    await Stop()
+    nowPlaying.value = { station: '', title: '' }
+    await refreshPlayback()
+    return
+  }
   if (playback.value.playing) {
     await PausePlayback()
   } else if (playback.value.paused) {
@@ -593,11 +600,12 @@ onUnmounted(() => {
         <div class="flex items-center gap-2">
           <button
             class="icon-btn icon-btn-lg"
-            :title="playback.playing ? 'Pause' : 'Play'"
-            :aria-label="playback.playing ? 'Pause' : 'Play'"
+            :title="playback.playing ? 'Pause' : playback.loading ? 'Cancel' : 'Play'"
+            :aria-label="playback.playing ? 'Pause' : playback.loading ? 'Cancel' : 'Play'"
             @click="togglePlay"
           >
             <Pause v-if="playback.playing" :size="iconSizeLg" fill="currentColor" />
+            <LoaderCircle v-else-if="playback.loading" :size="iconSizeLg" class="animate-spin" />
             <Play v-else :size="iconSizeLg" fill="currentColor" />
           </button>
           <button class="icon-btn icon-btn-lg" title="Stop" aria-label="Stop" @click="stopPlayback">
