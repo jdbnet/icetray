@@ -1,6 +1,6 @@
 module github.com/jdbnet/icetray
 
-go 1.26.0
+go 1.27.1
 
 require (
 	github.com/ebitengine/oto/v3 v3.5.1

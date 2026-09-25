@@ -12,7 +12,7 @@ OUTDIR="${OUTDIR:-dist}"
 mkdir -p "${OUTDIR}"
 
 if ! command -v nfpm >/dev/null 2>&1; then
-  go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+  go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
   export PATH="$(go env GOPATH)/bin:${PATH}"
 fi
 
