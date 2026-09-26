@@ -404,7 +404,9 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 	var retire *streamHandoff
 	if handoff != nil && handoff.ctrl != nil {
 		if CrossfadeDuration() > 0 {
-			toPlay = newCrossfade(handoff.ctrl, ctrl, speakerSampleRate)
+			var crossfadeDone <-chan struct{}
+			toPlay, crossfadeDone = newCrossfade(handoff.ctrl, ctrl, speakerSampleRate, stabilizeHandoffOutput)
+			handoff.crossfadeDone = crossfadeDone
 		}
 		retire = handoff
 	}

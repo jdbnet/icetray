@@ -11,6 +11,7 @@ type streamHandoff struct {
 	ctrl           *beep.Ctrl
 	fader          *smoothFader
 	retireOutgoing func()
+	crossfadeDone  <-chan struct{}
 }
 
 func (p *Player) detachActivePlayback() *streamHandoff {
@@ -30,7 +31,16 @@ func (p *Player) detachActivePlayback() *streamHandoff {
 }
 
 func (p *Player) finishHandoff(h *streamHandoff, gen uint64) {
-	time.Sleep(CrossfadeDuration())
+	if h.crossfadeDone != nil {
+		timeout := CrossfadeDuration() + 2*time.Second
+		select {
+		case <-h.crossfadeDone:
+		case <-time.After(timeout):
+		}
+	} else {
+		time.Sleep(CrossfadeDuration())
+	}
+
 	if h.cancel != nil {
 		close(h.cancel)
 	}
@@ -43,6 +53,7 @@ func (p *Player) finishHandoff(h *streamHandoff, gen uint64) {
 	stale := p.sourceGen != gen || !p.isRunning
 	p.mu.Unlock()
 	if !stale && ctrl != nil {
+		stabilizeHandoffOutput(ctrl)
 		finalizeHandoffOutput(ctrl)
 	}
 }

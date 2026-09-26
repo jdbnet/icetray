@@ -25,7 +25,7 @@ func TestCrossfadeGains(t *testing.T) {
 
 func TestCrossfadeMixesStreams(t *testing.T) {
 	const sr = beep.SampleRate(44100)
-	cf := newCrossfade(constantStreamer{v: 1}, constantStreamer{v: 0.5}, sr)
+	cf, _ := newCrossfade(constantStreamer{v: 1}, constantStreamer{v: 0.5}, sr, nil)
 	buf := make([][2]float64, 256)
 	n, ok := cf.Stream(buf)
 	if n == 0 || !ok {

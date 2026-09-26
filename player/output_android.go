@@ -72,19 +72,16 @@ func (r *pcmReader) Read(p []byte) (int, error) {
 	} else {
 		r.buf = r.buf[:frames]
 	}
-	filled := 0
-	ok := true
-	for filled < frames {
-		n, streamOK := src.Stream(r.buf[filled:frames])
-		ok = streamOK
-		if n == 0 {
-			if !ok {
-				clear(p[:frames*outputBytesPerFrame])
-				return frames * outputBytesPerFrame, nil
-			}
-			return 0, nil
+	n, _ := streamFill(src, r.buf[:frames])
+	if n < frames {
+		for i := n; i < frames; i++ {
+			r.buf[i] = [2]float64{}
 		}
-		filled += n
+		n = frames
+	}
+	if n == 0 {
+		clear(p[:frames*outputBytesPerFrame])
+		return frames * outputBytesPerFrame, nil
 	}
 	out := p[:frames*outputBytesPerFrame]
 	for i := 0; i < frames; i++ {
@@ -110,7 +107,7 @@ func initOutput() error {
 			SampleRate:   int(speakerSampleRate),
 			ChannelCount: outputChannels,
 			Format:       oto.FormatSignedInt16LE,
-			BufferSize:   80 * time.Millisecond,
+			BufferSize:   120 * time.Millisecond,
 		})
 		if err != nil {
 			otoErr = err
@@ -159,6 +156,10 @@ func handoffClearOutput() {
 }
 
 func finalizeHandoffOutput(src beep.Streamer) {
+	setOutputStream(src)
+}
+
+func stabilizeHandoffOutput(src beep.Streamer) {
 	setOutputStream(src)
 }
 

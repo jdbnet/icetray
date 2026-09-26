@@ -2,6 +2,7 @@ package player
 
 import (
 	"math"
+	"sync"
 
 	"github.com/gopxl/beep"
 )
@@ -12,19 +13,26 @@ type crossfadeStreamer struct {
 	incoming beep.Streamer
 	step     int
 	steps    int
+
+	done     chan struct{}
+	once     sync.Once
+	onStable func(beep.Streamer)
 }
 
-func newCrossfade(outgoing, incoming beep.Streamer, sr beep.SampleRate) *crossfadeStreamer {
+func newCrossfade(outgoing, incoming beep.Streamer, sr beep.SampleRate, onStable func(beep.Streamer)) (*crossfadeStreamer, <-chan struct{}) {
 	d := CrossfadeDuration()
 	steps := sr.N(d)
 	if steps < 1 {
 		steps = 1
 	}
-	return &crossfadeStreamer{
+	c := &crossfadeStreamer{
 		outgoing: outgoing,
 		incoming: incoming,
 		steps:    steps,
+		done:     make(chan struct{}),
+		onStable: onStable,
 	}
+	return c, c.done
 }
 
 func crossfadeGains(step, steps int) (outGain, inGain float64) {
@@ -53,8 +61,6 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 	var outN int
 	var outOk bool
 	if c.outgoing != nil {
-		// Incoming is already buffered above; blocking on outgoing keeps the fade-off
-		// continuous instead of inserting silence when the old ahead queue hiccups.
 		outN, outOk = streamFill(c.outgoing, outBuf)
 		if outN == 0 && !outOk {
 			c.outgoing = nil
@@ -85,12 +91,25 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 		}
 	}
 
-	// Keep the stream alive while the incoming leg exists; gaps are silence-filled by the platform output.
+	c.signalStableIfComplete()
+
 	if c.incoming != nil {
 		return len(samples), true
 	}
 	ok := inOk || outOk || c.outgoing != nil
 	return len(samples), ok
+}
+
+func (c *crossfadeStreamer) signalStableIfComplete() {
+	if c.step < c.steps {
+		return
+	}
+	c.once.Do(func() {
+		close(c.done)
+		if c.onStable != nil && c.incoming != nil {
+			c.onStable(c.incoming)
+		}
+	})
 }
 
 func (c *crossfadeStreamer) Err() error {
