@@ -123,8 +123,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        applySafeAreaInsets();
         hideStatusBar();
+        applySafeAreaInsets();
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -838,8 +838,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Pad the WebView below the status bar, camera cutout, and gesture/nav bar.
-     * Required for edge-to-edge on devices like Pixel 8 (Play Console safe-area checks).
+     * Edge-to-edge layout with padding only for the nav bar and display cutout.
+     * The status bar stays hidden (see hideStatusBar); do not pad for its inset.
      */
     private void applySafeAreaInsets() {
         View root = findViewById(R.id.main_container);
@@ -848,9 +848,13 @@ public class MainActivity extends AppCompatActivity {
             getWindow().setNavigationBarContrastEnforced(false);
         }
         ViewCompat.setOnApplyWindowInsetsListener(root, (view, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(
-                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
-            view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+            Insets nav = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars());
+            Insets cutout = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            int left = Math.max(nav.left, cutout.left);
+            int right = Math.max(nav.right, cutout.right);
+            int top = cutout.top;
+            int bottom = nav.bottom;
+            view.setPadding(left, top, right, bottom);
             return WindowInsetsCompat.CONSUMED;
         });
         ViewCompat.requestApplyInsets(root);
@@ -866,6 +870,10 @@ public class MainActivity extends AppCompatActivity {
         controller.hide(WindowInsetsCompat.Type.statusBars());
         controller.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        View root = findViewById(R.id.main_container);
+        if (root != null) {
+            ViewCompat.requestApplyInsets(root);
+        }
     }
 
     @Override

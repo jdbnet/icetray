@@ -5,7 +5,7 @@
         <item name="colorPrimary">@color/wails_blue</item>
         <item name="colorPrimaryVariant">@color/wails_blue_dark</item>
         <item name="colorOnPrimary">@android:color/white</item>
-        <!-- Edge-to-edge: insets applied in MainActivity (not legacy windowFullscreen). -->
+        <!-- Edge-to-edge: nav/cutout insets in MainActivity; status bar hidden in code. -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/wails_background</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
