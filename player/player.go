@@ -404,7 +404,9 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 	var toPlay beep.Streamer = ctrl
 	var retire *streamHandoff
 	if handoff != nil && handoff.ctrl != nil {
-		toPlay = newCrossfade(handoff.ctrl, ctrl, speakerSampleRate)
+		if CrossfadeDuration() > 0 {
+			toPlay = newCrossfade(handoff.ctrl, ctrl, speakerSampleRate)
+		}
 		retire = handoff
 	}
 	p.mu.Unlock()

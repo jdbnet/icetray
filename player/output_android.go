@@ -72,16 +72,22 @@ func (r *pcmReader) Read(p []byte) (int, error) {
 	} else {
 		r.buf = r.buf[:frames]
 	}
-	n, ok := src.Stream(r.buf)
-	if n == 0 {
-		if !ok {
-			clear(p[:frames*outputBytesPerFrame])
-			return frames * outputBytesPerFrame, nil
+	filled := 0
+	ok := true
+	for filled < frames {
+		n, streamOK := src.Stream(r.buf[filled:frames])
+		ok = streamOK
+		if n == 0 {
+			if !ok {
+				clear(p[:frames*outputBytesPerFrame])
+				return frames * outputBytesPerFrame, nil
+			}
+			return 0, nil
 		}
-		return 0, nil
+		filled += n
 	}
-	out := p[:n*outputBytesPerFrame]
-	for i := 0; i < n; i++ {
+	out := p[:frames*outputBytesPerFrame]
+	for i := 0; i < frames; i++ {
 		binary.LittleEndian.PutUint16(out[i*outputBytesPerFrame:], floatToPCM(r.buf[i][0]))
 		binary.LittleEndian.PutUint16(out[i*outputBytesPerFrame+2:], floatToPCM(r.buf[i][1]))
 	}
@@ -150,6 +156,10 @@ func handoffClearOutput() {
 	if outReader != nil {
 		outReader.set(nil, false)
 	}
+}
+
+func finalizeHandoffOutput(src beep.Streamer) {
+	replaceOutput(src)
 }
 
 func replaceOutput(src beep.Streamer) {

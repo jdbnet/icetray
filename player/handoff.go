@@ -37,6 +37,14 @@ func (p *Player) finishHandoff(h *streamHandoff, gen uint64) {
 	if h.retireOutgoing != nil {
 		h.retireOutgoing()
 	}
+
+	p.mu.Lock()
+	ctrl := p.ctrl
+	stale := p.sourceGen != gen || !p.isRunning
+	p.mu.Unlock()
+	if !stale && ctrl != nil {
+		finalizeHandoffOutput(ctrl)
+	}
 }
 
 // SetHandoffRetire registers a callback to run when the current crossfade ends (e.g. stop the previous HTTP reader).

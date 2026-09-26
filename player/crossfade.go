@@ -48,12 +48,12 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 
 	// Pull incoming first so Android's synchronous Oto read is not blocked on an
 	// empty outgoing ahead-buffer during station handoff.
-	inN, inOk := c.incoming.Stream(inBuf)
+	inN, inOk := streamFill(c.incoming, inBuf)
 
 	var outN int
 	var outOk bool
 	if c.outgoing != nil {
-		outN, outOk = streamNonBlocking(c.outgoing, outBuf)
+		outN, outOk = streamFillNonBlocking(c.outgoing, outBuf)
 		if outN == 0 && !outOk {
 			c.outgoing = nil
 		}
