@@ -824,6 +824,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         hideStatusBar();
+        if (webView != null) {
+            CastCoordinator.INSTANCE.attach(webView);
+        }
         if (bridge != null) {
             bridge.onResume();
         }

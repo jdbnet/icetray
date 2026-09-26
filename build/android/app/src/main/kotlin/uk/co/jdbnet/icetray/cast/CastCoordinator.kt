@@ -24,6 +24,7 @@ import com.google.android.gms.common.GoogleApiAvailability
 import com.wails.app.R
 import org.json.JSONObject
 import uk.co.jdbnet.icetray.NativeBridge
+import uk.co.jdbnet.icetray.PlaybackSessionHub
 import java.lang.ref.WeakReference
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -36,6 +37,9 @@ object CastCoordinator {
 
     @Volatile
     private var appContext: Context? = null
+
+    @Volatile
+    private var castContext: CastContext? = null
 
     @Volatile
     private var webViewRef: WeakReference<WebView>? = null
@@ -61,6 +65,9 @@ object CastCoordinator {
     fun init(app: Application) {
         appContext = app.applicationContext
         CastContext.getSharedInstance(app, initExecutor)
+            .addOnSuccessListener { ctx ->
+                mainHandler.post { onCastContextReady(ctx) }
+            }
             .addOnFailureListener { err ->
                 Log.w(TAG, "CastContext init failed", err)
             }
@@ -68,15 +75,23 @@ object CastCoordinator {
 
     fun attach(webView: WebView) {
         webViewRef = WeakReference(webView)
-        val context = webView.context.applicationContext
-        val castContext = castContextOrNull(context) ?: return
-        ensureSessionListener(castContext)
-        val session = castContext.sessionManager.currentCastSession
-        if (session != null && session.isConnected) {
-            onCastConnected(session)
-        } else {
-            pushJsState()
+        val ready = castContext
+        if (ready != null) {
+            bindToCastContext(ready)
+            return
         }
+        val context = webView.context.applicationContext
+        CastContext.getSharedInstance(context, initExecutor)
+            .addOnSuccessListener { ctx ->
+                mainHandler.post {
+                    if (webViewRef?.get() === webView) {
+                        onCastContextReady(ctx)
+                    }
+                }
+            }
+            .addOnFailureListener { err ->
+                Log.w(TAG, "CastContext attach failed", err)
+            }
     }
 
     fun detach(webView: WebView) {
@@ -102,24 +117,65 @@ object CastCoordinator {
             Toast.makeText(activity, R.string.cast_unavailable, Toast.LENGTH_LONG).show()
             return
         }
-        val castContext = castContextOrNull(activity)
-        if (castContext == null) {
-            Toast.makeText(activity, R.string.cast_unavailable, Toast.LENGTH_LONG).show()
-            return
+        CastContext.getSharedInstance(activity, initExecutor)
+            .addOnSuccessListener { ctx ->
+                activity.runOnUiThread { showDialogWithContext(activity, ctx) }
+            }
+            .addOnFailureListener { err ->
+                Log.w(TAG, "CastContext unavailable for dialog", err)
+                activity.runOnUiThread {
+                    Toast.makeText(activity, R.string.cast_unavailable, Toast.LENGTH_LONG).show()
+                }
+            }
+    }
+
+    fun onSessionPayload(payload: JSONObject) {
+        mainHandler.post { applyPayloadOnMain(payload) }
+    }
+
+    private fun onCastContextReady(ctx: CastContext) {
+        castContext = ctx
+        bindToCastContext(ctx)
+    }
+
+    private fun bindToCastContext(ctx: CastContext) {
+        ensureSessionListener(ctx)
+        val session = ctx.sessionManager.currentCastSession
+        if (session != null && session.isConnected) {
+            onCastConnected(session)
+        } else {
+            pushJsState()
+        }
+    }
+
+    private fun showDialogWithContext(activity: Activity, castContext: CastContext) {
+        ensureSessionListener(castContext)
+        val alreadyConnected = connected
+        if (!alreadyConnected) {
+            PlaybackSessionHub.releaseLocalMediaSessionForCastPicker()
         }
         val session = castContext.sessionManager.currentCastSession
         val selector = castContext.mergedSelector
         if (session != null && session.isConnected) {
             MediaRouteControllerDialog(activity).show()
-        } else if (selector != null) {
-            MediaRouteChooserDialog(activity).apply {
-                routeSelector = selector
-            }.show()
+            return
         }
-    }
-
-    fun onSessionPayload(payload: JSONObject) {
-        mainHandler.post { applyPayloadOnMain(payload) }
+        if (selector == null) {
+            Toast.makeText(activity, R.string.cast_unavailable, Toast.LENGTH_LONG).show()
+            if (!alreadyConnected) {
+                PlaybackSessionHub.restoreLocalMediaSessionAfterCastPicker()
+            }
+            return
+        }
+        val dialog = MediaRouteChooserDialog(activity).apply {
+            routeSelector = selector
+        }
+        dialog.setOnDismissListener {
+            if (!connected && !alreadyConnected) {
+                PlaybackSessionHub.restoreLocalMediaSessionAfterCastPicker()
+            }
+        }
+        dialog.show()
     }
 
     private fun applyPayloadOnMain(payload: JSONObject) {
@@ -159,6 +215,11 @@ object CastCoordinator {
                 applyingRemote.set(true)
                 client.play()
             }
+            maybeUpdateMetadata(client, title, artist)
+            return
+        }
+
+        if (loading) {
             maybeUpdateMetadata(client, title, artist)
             return
         }
@@ -243,6 +304,7 @@ object CastCoordinator {
 
             override fun onSessionStartFailed(session: CastSession, error: Int) {
                 Log.w(TAG, "Cast session start failed: $error")
+                PlaybackSessionHub.restoreLocalMediaSessionAfterCastPicker()
             }
 
             override fun onSessionEnding(session: CastSession) = Unit
@@ -328,17 +390,7 @@ object CastCoordinator {
     }
 
     private fun remoteClient(): RemoteMediaClient? {
-        val context = appContext ?: return null
-        val session = castContextOrNull(context)?.sessionManager?.currentCastSession
+        val session = castContext?.sessionManager?.currentCastSession
         return session?.remoteMediaClient
-    }
-
-    private fun castContextOrNull(context: Context): CastContext? {
-        return try {
-            CastContext.getSharedInstance(context)
-        } catch (err: Exception) {
-            Log.w(TAG, "CastContext unavailable", err)
-            null
-        }
     }
 }
