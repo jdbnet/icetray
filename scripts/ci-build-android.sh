@@ -58,6 +58,8 @@ if [ -z "${ANDROID_NDK_HOME:-}" ]; then
   fi
 fi
 
+bash scripts/typecheck-android-player.sh
+
 echo "==> Building signed Android APK and fat AAB (wails3)..."
 wails3 task android:package:fat
 wails3 task android:bundle:fat
