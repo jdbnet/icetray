@@ -53,7 +53,9 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 	var outN int
 	var outOk bool
 	if c.outgoing != nil {
-		outN, outOk = streamFillNonBlocking(c.outgoing, outBuf)
+		// Incoming is already buffered above; blocking on outgoing keeps the fade-off
+		// continuous instead of inserting silence when the old ahead queue hiccups.
+		outN, outOk = streamFill(c.outgoing, outBuf)
 		if outN == 0 && !outOk {
 			c.outgoing = nil
 		}
