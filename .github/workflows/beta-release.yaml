@@ -1,0 +1,259 @@
+name: Beta Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_amd64:
+        description: Linux amd64, Windows, amd64 .deb
+        type: boolean
+        default: true
+      build_arm64:
+        description: Linux arm64, arm64 .deb
+        type: boolean
+        default: false
+      build_android:
+        description: Signed Android APK and AAB
+        type: boolean
+        default: true
+      build_macos:
+        description: macOS universal .zip
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semantic.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Configure beta semantic release
+        run: |
+          LATEST="$(git tag -l 'v*' --sort=-v:refname | grep -Ev -- '-(beta|alpha|rc)' | head -1 || true)"
+          LATEST="${LATEST#v}"
+          if [ -z "$LATEST" ]; then
+            MAJOR=0
+          else
+            MAJOR="${LATEST%%.*}"
+          fi
+          cat > .semrelrc <<EOF
+          {
+            "maintainedVersion": "${MAJOR}-beta",
+            "plugins": {
+              "provider": {
+                "name": "github",
+                "options": {
+                  "prerelease": true
+                }
+              }
+            }
+          }
+          EOF
+          cat .semrelrc
+
+      - id: semantic
+        uses: go-semantic-release/action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: true
+
+  build-amd64:
+    needs: version
+    if: needs.version.outputs.version != '' && inputs.build_amd64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.version.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build amd64 and Windows binaries
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bash scripts/ci-build-amd64.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-amd64
+          path: |
+            dist/icetray-linux-amd64
+            dist/icetray-headless-linux-amd64
+            dist/icetray-windows-amd64.exe
+            dist/icetray-windows-arm64.exe
+            dist/icetray-windows-amd64-setup.exe
+            dist/icetray-windows-arm64-setup.exe
+            dist/icetray_*_amd64.deb
+
+  build-arm64:
+    needs: version
+    if: needs.version.outputs.version != '' && inputs.build_arm64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.version.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build arm64 binaries
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bash scripts/ci-build-arm64.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-arm64
+          path: |
+            dist/icetray-linux-arm64
+            dist/icetray-headless-linux-arm64
+            dist/icetray_*_arm64.deb
+
+  build-android:
+    needs: version
+    if: needs.version.outputs.version != '' && inputs.build_android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.version.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;28.2.13676358"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/28.2.13676358" >> "${GITHUB_ENV}"
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "${GITHUB_ENV}"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build signed Android APK and AAB
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash scripts/ci-build-android.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-android
+          path: |
+            dist/icetray-android.apk
+            dist/icetray-android.aab
+
+  build-macos:
+    needs: version
+    if: needs.version.outputs.version != '' && inputs.build_macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.version.outputs.version }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build macOS universal app
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bash scripts/ci-build-macos.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-macos
+          path: dist/icetray-macos-universal.zip
+
+  publish:
+    needs: [version, build-amd64, build-arm64, build-android, build-macos]
+    if: >-
+      always() &&
+      needs.version.outputs.version != '' &&
+      (needs.build-amd64.result == 'success' || needs.build-amd64.result == 'skipped') &&
+      (needs.build-arm64.result == 'success' || needs.build-arm64.result == 'skipped') &&
+      (needs.build-android.result == 'success' || needs.build-android.result == 'skipped') &&
+      (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
+      (needs.build-amd64.result == 'success' ||
+       needs.build-arm64.result == 'success' ||
+       needs.build-android.result == 'success' ||
+       needs.build-macos.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+
+      - name: Merge build artifacts
+        run: |
+          mkdir -p dist
+          for dir in dist/dist-*; do
+            [ -d "$dir" ] || continue
+            if [ -d "$dir/dist" ]; then
+              mv "$dir"/dist/* dist/
+            else
+              mv "$dir"/* dist/
+            fi
+          done
+          rm -rf dist/dist-*
+          ls -lh dist/
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: v${{ needs.version.outputs.version }} (beta)
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
