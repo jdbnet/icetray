@@ -17,6 +17,9 @@ type crossfadeStreamer struct {
 	done     chan struct{}
 	once     sync.Once
 	onStable func(beep.Streamer)
+
+	outBuf [][2]float64
+	inBuf  [][2]float64
 }
 
 func newCrossfade(outgoing, incoming beep.Streamer, sr beep.SampleRate, onStable func(beep.Streamer)) (*crossfadeStreamer, <-chan struct{}) {
@@ -51,8 +54,18 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 		return 0, false
 	}
 
-	outBuf := make([][2]float64, len(samples))
-	inBuf := make([][2]float64, len(samples))
+	if cap(c.outBuf) < len(samples) {
+		c.outBuf = make([][2]float64, len(samples))
+	} else {
+		c.outBuf = c.outBuf[:len(samples)]
+	}
+	if cap(c.inBuf) < len(samples) {
+		c.inBuf = make([][2]float64, len(samples))
+	} else {
+		c.inBuf = c.inBuf[:len(samples)]
+	}
+	outBuf := c.outBuf
+	inBuf := c.inBuf
 
 	// Pull incoming first so Android's synchronous Oto read is not blocked on an
 	// empty outgoing ahead-buffer during station handoff.

@@ -4,6 +4,7 @@ package player
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -15,9 +16,10 @@ import (
 )
 
 const (
-	outputChannels      = 2
-	outputBytesPerCh    = 2
-	outputBytesPerFrame = outputChannels * outputBytesPerCh
+	outputChannels             = 2
+	outputBytesPerCh           = 2
+	outputBytesPerFrame        = outputChannels * outputBytesPerCh
+	androidOutputAheadDuration = 600 * time.Millisecond
 )
 
 var (
@@ -28,7 +30,49 @@ var (
 	outMu        sync.Mutex
 	outPlayer    *oto.Player
 	outReader    *pcmReader
+
+	androidRelay *androidOutputRelay
+	androidAhead *aheadStreamer
 )
+
+// androidOutputRelay holds the active beep streamer. Oto always reads through androidAhead so
+// crossfade mixing and dual decoders never block the mux read loop directly.
+type androidOutputRelay struct {
+	mu  sync.Mutex
+	src beep.Streamer
+}
+
+func (r *androidOutputRelay) set(src beep.Streamer, flushAhead bool) {
+	r.mu.Lock()
+	r.src = src
+	r.mu.Unlock()
+	if flushAhead && androidAhead != nil {
+		androidAhead.flush()
+	}
+}
+
+func (r *androidOutputRelay) Stream(samples [][2]float64) (int, bool) {
+	r.mu.Lock()
+	src := r.src
+	r.mu.Unlock()
+	if src == nil {
+		for i := range samples {
+			samples[i] = [2]float64{}
+		}
+		return len(samples), true
+	}
+	n, ok := streamFill(src, samples)
+	if n < len(samples) {
+		for i := n; i < len(samples); i++ {
+			samples[i] = [2]float64{}
+		}
+		n = len(samples)
+	}
+	if n == 0 {
+		return len(samples), ok
+	}
+	return n, ok
+}
 
 type pcmReader struct {
 	mu     sync.Mutex
@@ -101,6 +145,31 @@ func floatToPCM(v float64) uint16 {
 	return uint16(int16(v * (math.MaxInt16 - 1)))
 }
 
+func ensureAndroidOutputPipelineLocked() {
+	if androidRelay == nil {
+		androidRelay = &androidOutputRelay{}
+	}
+	if androidAhead == nil {
+		capacity := speakerSampleRate.N(androidOutputAheadDuration)
+		if capacity < 8192 {
+			capacity = 8192
+		}
+		androidAhead = newAheadStreamer(androidRelay, capacity)
+	}
+	if outReader == nil {
+		outReader = &pcmReader{}
+	}
+	outReader.set(androidAhead, false)
+}
+
+func resetAndroidOutputPipelineLocked() {
+	if androidAhead != nil {
+		androidAhead.stopFill()
+	}
+	androidRelay = nil
+	androidAhead = nil
+}
+
 func initOutput() error {
 	otoInit.Do(func() {
 		ctx, ready, err := oto.NewContext(&oto.NewContextOptions{
@@ -120,26 +189,16 @@ func initOutput() error {
 }
 
 func playOutput(src beep.Streamer) {
-	outMu.Lock()
-	defer outMu.Unlock()
-	resumeOutputLocked()
-	if outReader == nil {
-		outReader = &pcmReader{}
-	}
-	outReader.set(src, false)
-	if outPlayer == nil {
-		player := otoCtx.NewPlayer(outReader)
-		player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
-		outPlayer = player
-		player.Play()
-		return
-	}
-	outPlayer.Play()
+	setOutputStream(src)
 }
 
 func clearOutput() {
 	outMu.Lock()
 	defer outMu.Unlock()
+	if androidRelay != nil {
+		androidRelay.set(nil, true)
+	}
+	resetAndroidOutputPipelineLocked()
 	if outReader != nil {
 		outReader.set(nil, false)
 	}
@@ -150,17 +209,17 @@ func clearOutput() {
 func handoffClearOutput() {
 	outMu.Lock()
 	defer outMu.Unlock()
-	if outReader != nil {
-		outReader.set(nil, false)
+	if androidRelay != nil {
+		androidRelay.set(nil, true)
 	}
 }
 
 func finalizeHandoffOutput(src beep.Streamer) {
-	setOutputStream(src)
+	setOutputStreamWithoutFlush(src)
 }
 
 func stabilizeHandoffOutput(src beep.Streamer) {
-	setOutputStream(src)
+	setOutputStreamWithoutFlush(src)
 }
 
 func replaceOutput(src beep.Streamer) {
@@ -170,11 +229,19 @@ func replaceOutput(src beep.Streamer) {
 func setOutputStream(src beep.Streamer) {
 	outMu.Lock()
 	defer outMu.Unlock()
+	setOutputStreamLocked(src, true)
+}
+
+func setOutputStreamWithoutFlush(src beep.Streamer) {
+	outMu.Lock()
+	defer outMu.Unlock()
+	setOutputStreamLocked(src, false)
+}
+
+func setOutputStreamLocked(src beep.Streamer, flushAhead bool) {
 	resumeOutputLocked()
-	if outReader == nil {
-		outReader = &pcmReader{}
-	}
-	outReader.set(src, false)
+	ensureAndroidOutputPipelineLocked()
+	androidRelay.set(src, flushAhead)
 	if outPlayer != nil {
 		return
 	}
@@ -222,6 +289,20 @@ func lockOutput() {
 
 func unlockOutput() {
 	outMu.Unlock()
+}
+
+func logOutputStarvation() {
+	if androidAhead == nil {
+		return
+	}
+	n := androidAhead.takeStarveCount()
+	if n > 0 {
+		buffered := 0
+		if outPlayer != nil {
+			buffered = outPlayer.BufferedSize()
+		}
+		logger.Log(fmt.Sprintf("android audio: output ahead starved %d times (oto buffered %d bytes)", n, buffered))
+	}
 }
 
 func pauseOutput(ctrl *beep.Ctrl, paused bool) {

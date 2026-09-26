@@ -48,6 +48,8 @@ func (p *Player) finishHandoff(h *streamHandoff, gen uint64) {
 		h.retireOutgoing()
 	}
 
+	logOutputStarvation()
+
 	p.mu.Lock()
 	ctrl := p.ctrl
 	stale := p.sourceGen != gen || !p.isRunning
