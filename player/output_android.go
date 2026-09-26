@@ -95,7 +95,7 @@ func (r *pcmReader) Read(p []byte) (int, error) {
 	} else {
 		r.buf = r.buf[:frames]
 	}
-	n, ok := androidOut.Stream(r.buf)
+	n, _ := androidOut.Stream(r.buf)
 	if n < frames {
 		for i := n; i < frames; i++ {
 			r.buf[i] = [2]float64{}
