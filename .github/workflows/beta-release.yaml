@@ -65,6 +65,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           prerelease: true
+          custom-arguments: --allow-maintained-version-on-default-branch
 
   build-amd64:
     needs: version
