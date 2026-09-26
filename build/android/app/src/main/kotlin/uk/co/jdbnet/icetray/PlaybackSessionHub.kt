@@ -35,4 +35,22 @@ internal object PlaybackSessionHub {
     fun bindContext(context: Context) {
         PlaybackService.appContext = context.applicationContext
     }
+
+    /**
+     * Media3 1.11 keeps an active MediaSession while IceTray is playing locally. That session
+     * can prevent Cast route discovery from presenting devices. Drop the foreground session while
+     * the Cast picker is visible; local audio still comes from the Go/oto pipeline.
+     */
+    fun releaseLocalMediaSessionForCastPicker() {
+        PlaybackService.dismissForCast()
+    }
+
+    /** Restore notification media controls if the user closed the picker without connecting. */
+    fun restoreLocalMediaSessionAfterCastPicker() {
+        val payload = latest ?: return
+        if (payload.optBoolean("casting", false)) {
+            return
+        }
+        dispatch(payload)
+    }
 }
