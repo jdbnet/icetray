@@ -63,8 +63,8 @@ type Player struct {
 	volumeEffect   *effects.Volume
 	smoothFader    *smoothFader
 	pendingHandoff *streamHandoff
-	handoffRetire    func()
-	stateListeners   []func()
+	handoffRetire  func()
+	stateListeners []func()
 	sourceWorkers  atomic.Int32
 }
 
@@ -161,22 +161,28 @@ func (p *Player) ClearSource() {
 	p.smoothFader = nil
 	p.stopActiveStreamLocked()
 	p.mu.Unlock()
-	p.fadeOutAndClearOutput(oldFader, true)
+	p.fadeOutAndClearOutput(oldFader, false)
 }
 
-// fadeOutAndClearOutput stops playback. waitForFade is false on app shutdown to avoid blocking quit.
-func (p *Player) fadeOutAndClearOutput(old *smoothFader, waitForFade bool) {
+// fadeOutAndClearOutput stops playback. waitForHandoff is true when clearing may overlap a long crossfade.
+func (p *Player) fadeOutAndClearOutput(old *smoothFader, waitForHandoff bool) {
 	if old != nil {
 		lockOutput()
 		old.Stop()
 		unlockOutput()
-		if waitForFade {
-			time.Sleep(CrossfadeDuration() + 50*time.Millisecond)
-		} else {
-			time.Sleep(50 * time.Millisecond)
-		}
 	}
+	time.Sleep(fadeOutSleepDuration(waitForHandoff))
 	clearOutput()
+}
+
+func fadeOutSleepDuration(waitForHandoff bool) time.Duration {
+	if waitForHandoff {
+		if d := CrossfadeDuration(); d > 0 {
+			return d + EdgeFadeSleepDuration()
+		}
+		return HandoffCompletionDuration() + EdgeFadeSleepDuration()
+	}
+	return EdgeFadeSleepDuration()
 }
 
 // stopActiveStreamLocked stops the active streamer. Must be called with p.mu locked.
@@ -362,11 +368,17 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 	p.pendingHandoff = nil
 	p.mu.Unlock()
 
-	if handoff == nil {
-		if !warmupStreamer(output, warmupSamples(), cancelled) {
-			return nil, false
-		}
+	if !warmupStreamer(output, warmupSamples(), cancelled) {
+		return nil, false
 	}
+
+	var fader *smoothFader
+	if handoff != nil && handoff.ctrl != nil {
+		fader = newSmoothFaderNoFadeIn(output, speakerSampleRate)
+	} else {
+		fader = newSmoothFader(output, speakerSampleRate)
+	}
+	output = fader
 	output = bufferPlayback(output)
 
 	var stopFill func()
@@ -385,15 +397,9 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 		return nil, false
 	}
 
-	var fader *smoothFader
-	if handoff != nil && handoff.ctrl != nil {
-		fader = newSmoothFaderNoFadeIn(output, speakerSampleRate)
-	} else {
-		fader = newSmoothFader(output, speakerSampleRate)
-	}
 	isPaused := p.isPaused
 	ctrl := &beep.Ctrl{
-		Streamer: fader,
+		Streamer: output,
 		Paused:   isPaused,
 	}
 	p.ctrl = ctrl
@@ -403,11 +409,9 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 	var toPlay beep.Streamer = ctrl
 	var retire *streamHandoff
 	if handoff != nil && handoff.ctrl != nil {
-		if CrossfadeDuration() > 0 {
-			var crossfadeDone <-chan struct{}
-			toPlay, crossfadeDone = newCrossfade(handoff.ctrl, ctrl, speakerSampleRate, stabilizeHandoffOutput)
-			handoff.crossfadeDone = crossfadeDone
-		}
+		var crossfadeDone <-chan struct{}
+		toPlay, crossfadeDone = newCrossfade(handoff.ctrl, ctrl, speakerSampleRate, stabilizeHandoffOutput)
+		handoff.crossfadeDone = crossfadeDone
 		retire = handoff
 	}
 	p.mu.Unlock()
