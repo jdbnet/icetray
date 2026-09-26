@@ -2,6 +2,7 @@ package player
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gopxl/beep"
@@ -28,6 +29,9 @@ type aheadStreamer struct {
 	ahead  int
 	closed bool
 	eof    bool
+
+	// starveCount increments when Stream blocks waiting for fill (diagnostics).
+	starveCount atomic.Uint64
 }
 
 func newAheadStreamer(src beep.Streamer, ahead int) *aheadStreamer {
@@ -80,6 +84,7 @@ func (a *aheadStreamer) Stream(samples [][2]float64) (int, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for len(a.buf) == 0 && !a.eof && !a.closed {
+		a.starveCount.Add(1)
 		a.cond.Wait()
 	}
 	if len(a.buf) == 0 {
@@ -116,6 +121,17 @@ func (a *aheadStreamer) stopFill() {
 	a.closed = true
 	a.cond.Broadcast()
 	a.mu.Unlock()
+}
+
+func (a *aheadStreamer) flush() {
+	a.mu.Lock()
+	a.buf = a.buf[:0]
+	a.cond.Broadcast()
+	a.mu.Unlock()
+}
+
+func (a *aheadStreamer) takeStarveCount() uint64 {
+	return a.starveCount.Swap(0)
 }
 
 func (a *aheadStreamer) waitReady(min int, timeout time.Duration, cancel <-chan struct{}) {

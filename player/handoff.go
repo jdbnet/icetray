@@ -33,12 +33,19 @@ func (p *Player) detachActivePlayback() *streamHandoff {
 func (p *Player) finishHandoff(h *streamHandoff, gen uint64) {
 	if h.crossfadeDone != nil {
 		timeout := CrossfadeDuration() + 2*time.Second
+		if CrossfadeDuration() <= 0 {
+			timeout = HandoffCompletionDuration() + 2*time.Second
+		}
 		select {
 		case <-h.crossfadeDone:
 		case <-time.After(timeout):
 		}
 	} else {
-		time.Sleep(CrossfadeDuration())
+		if CrossfadeDuration() > 0 {
+			time.Sleep(CrossfadeDuration())
+		} else {
+			time.Sleep(HandoffCompletionDuration())
+		}
 	}
 
 	if h.cancel != nil {
@@ -47,6 +54,8 @@ func (p *Player) finishHandoff(h *streamHandoff, gen uint64) {
 	if h.retireOutgoing != nil {
 		h.retireOutgoing()
 	}
+
+	logOutputStarvation()
 
 	p.mu.Lock()
 	ctrl := p.ctrl
