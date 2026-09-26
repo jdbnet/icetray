@@ -23,7 +23,7 @@ type smoothFader struct {
 }
 
 func newSmoothFader(streamer beep.Streamer, sr beep.SampleRate) *smoothFader {
-	d := CrossfadeDuration()
+	d := StreamEdgeFadeDuration()
 	return newSmoothFaderTimed(streamer, sr, d, d)
 }
 
@@ -39,7 +39,7 @@ func newSmoothFaderTimed(streamer beep.Streamer, sr beep.SampleRate, in, out tim
 }
 
 func newSmoothFaderNoFadeIn(streamer beep.Streamer, sr beep.SampleRate) *smoothFader {
-	return newSmoothFaderTimed(streamer, sr, 0, CrossfadeDuration())
+	return newSmoothFaderTimed(streamer, sr, 0, StreamEdgeFadeDuration())
 }
 
 func hannWindow(sr beep.SampleRate, length time.Duration) []float64 {

@@ -159,10 +159,14 @@ func handoffClearOutput() {
 }
 
 func finalizeHandoffOutput(src beep.Streamer) {
-	replaceOutput(src)
+	setOutputStream(src)
 }
 
 func replaceOutput(src beep.Streamer) {
+	setOutputStream(src)
+}
+
+func setOutputStream(src beep.Streamer) {
 	outMu.Lock()
 	defer outMu.Unlock()
 	resumeOutputLocked()
@@ -170,15 +174,13 @@ func replaceOutput(src beep.Streamer) {
 		outReader = &pcmReader{}
 	}
 	outReader.set(src, false)
-	if outPlayer == nil {
-		player := otoCtx.NewPlayer(outReader)
-		player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
-		outPlayer = player
-		player.Play()
+	if outPlayer != nil {
 		return
 	}
-	outPlayer.Reset()
-	outPlayer.Play()
+	player := otoCtx.NewPlayer(outReader)
+	player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
+	outPlayer = player
+	player.Play()
 }
 
 func stopPlayerLocked() {

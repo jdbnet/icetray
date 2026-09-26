@@ -356,8 +356,16 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 	cancelled := func() bool {
 		return attachCancelled(cancel, nil) || p.sourceStale(gen)
 	}
-	if !warmupStreamer(output, warmupSamples(), cancelled) {
-		return nil, false
+
+	p.mu.Lock()
+	handoff := p.pendingHandoff
+	p.pendingHandoff = nil
+	p.mu.Unlock()
+
+	if handoff == nil {
+		if !warmupStreamer(output, warmupSamples(), cancelled) {
+			return nil, false
+		}
 	}
 	output = bufferPlayback(output)
 
@@ -372,25 +380,16 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 	}
 
 	p.mu.Lock()
-	handoff := p.pendingHandoff
-	p.pendingHandoff = nil
 	if p.sourceGen != gen || !p.isRunning {
 		p.mu.Unlock()
 		return nil, false
 	}
-	p.mu.Unlock()
 
 	var fader *smoothFader
 	if handoff != nil && handoff.ctrl != nil {
 		fader = newSmoothFaderNoFadeIn(output, speakerSampleRate)
 	} else {
 		fader = newSmoothFader(output, speakerSampleRate)
-	}
-
-	p.mu.Lock()
-	if p.sourceGen != gen || !p.isRunning {
-		p.mu.Unlock()
-		return nil, false
 	}
 	isPaused := p.isPaused
 	ctrl := &beep.Ctrl{
