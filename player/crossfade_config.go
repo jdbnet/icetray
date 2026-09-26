@@ -38,3 +38,13 @@ func CrossfadeDuration() time.Duration {
 func StreamEdgeFadeDuration() time.Duration {
 	return streamEdgeFade
 }
+
+// EdgeFadeSleepDuration is how long to wait for a stream-edge fade-out to reach the device.
+func EdgeFadeSleepDuration() time.Duration {
+	return streamEdgeFade + 100*time.Millisecond
+}
+
+// HandoffCompletionDuration is the longest expected handoff when crossfade is disabled (0s).
+func HandoffCompletionDuration() time.Duration {
+	return 2*streamEdgeFade + 100*time.Millisecond
+}

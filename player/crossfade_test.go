@@ -1,37 +1,61 @@
 package player
 
 import (
-	"math"
 	"testing"
+	"time"
 
 	"github.com/gopxl/beep"
 )
 
-func TestCrossfadeGains(t *testing.T) {
-	out, in := crossfadeGains(0, 100)
-	if out < 0.99 || in > 0.01 {
-		t.Fatalf("start: expected mostly outgoing, got out=%v in=%v", out, in)
+func TestCrossfadeSequentialZeroDuration(t *testing.T) {
+	prev := CrossfadeDuration()
+	SetCrossfadeDuration(0)
+	t.Cleanup(func() { SetCrossfadeDuration(prev) })
+
+	const sr = beep.SampleRate(44100)
+	cf, done := newCrossfade(constantStreamer{v: 1}, constantStreamer{v: 0.25}, sr, nil)
+
+	outSteps := sr.N(StreamEdgeFadeDuration())
+	if outSteps < 2 {
+		outSteps = 2
 	}
-	out, in = crossfadeGains(99, 100)
-	if out > 0.01 || in < 0.99 {
-		t.Fatalf("end: expected mostly incoming, got out=%v in=%v", out, in)
+
+	buf := make([][2]float64, 64)
+	n, ok := cf.Stream(buf)
+	if n == 0 || !ok {
+		t.Fatal("expected samples")
 	}
-	midOut, midIn := crossfadeGains(50, 100)
-	sum := midOut*midOut + midIn*midIn
-	if math.Abs(sum-1) > 0.2 {
-		t.Fatalf("midpoint power should be near 1, got %v", sum)
+	if buf[0][0] < 0.5 {
+		t.Fatalf("first sequential sample should be mostly outgoing, got %v", buf[0][0])
+	}
+	if buf[0][0] < 0.9 && cf.step >= outSteps {
+		t.Fatalf("unexpected early incoming bleed at step %d", cf.step)
+	}
+
+	total := cf.steps
+	pumped := n
+	for pumped < total+256 {
+		n, ok = cf.Stream(buf)
+		if n == 0 && !ok {
+			break
+		}
+		pumped += n
+		select {
+		case <-done:
+			return
+		default:
+		}
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("sequential crossfade did not complete")
 	}
 }
 
-func TestCrossfadeMixesStreams(t *testing.T) {
-	const sr = beep.SampleRate(44100)
-	cf, _ := newCrossfade(constantStreamer{v: 1}, constantStreamer{v: 0.5}, sr, nil)
-	buf := make([][2]float64, 256)
-	n, ok := cf.Stream(buf)
-	if n == 0 || !ok {
-		t.Fatal("expected crossfade samples")
-	}
-	if buf[0][0] < 0.9 {
-		t.Fatalf("first sample should be mostly outgoing, got %v", buf[0][0])
+func TestFadeOutSleepDurationUsesEdgeFade(t *testing.T) {
+	d := fadeOutSleepDuration(false)
+	if d < StreamEdgeFadeDuration() {
+		t.Fatalf("stop fade wait should cover edge fade, got %v", d)
 	}
 }
