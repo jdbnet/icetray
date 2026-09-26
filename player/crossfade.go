@@ -78,6 +78,10 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 		}
 	}
 
+	// Keep the stream alive while the incoming leg exists; gaps are silence-filled by the platform output.
+	if c.incoming != nil {
+		return len(samples), true
+	}
 	ok := inOk || outOk || c.outgoing != nil
 	return len(samples), ok
 }

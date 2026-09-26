@@ -75,7 +75,10 @@ func (r *pcmReader) Read(p []byte) (int, error) {
 	n, ok := src.Stream(r.buf)
 	if n == 0 {
 		if !ok {
-			return 0, io.EOF
+			// Oto treats EOF as end-of-playback; beep streamers often return (0, false) briefly
+			// during crossfades and buffer refills. Emit silence and keep the player alive.
+			clear(p[:frames*outputBytesPerFrame])
+			return frames * outputBytesPerFrame, nil
 		}
 		return 0, nil
 	}
@@ -130,6 +133,7 @@ func playOutput(src beep.Streamer) {
 		player.Play()
 		return
 	}
+	outPlayer.Reset()
 	outPlayer.Play()
 }
 
@@ -166,6 +170,7 @@ func replaceOutput(src beep.Streamer) {
 		player.Play()
 		return
 	}
+	outPlayer.Reset()
 	outPlayer.Play()
 }
 

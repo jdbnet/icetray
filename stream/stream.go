@@ -434,7 +434,7 @@ func (s *Supervisor) attemptConnection(url string, session uint64, stopChan chan
 	}
 
 	s.mu.Lock()
-	if retire == nil && s.reader != nil && s.reader.IsConnected() {
+	if retire == nil && s.reader != nil && s.reader.IsConnected() && s.streamURL == url {
 		s.mu.Unlock()
 		return nil
 	}
@@ -470,11 +470,16 @@ func (s *Supervisor) attemptConnection(url string, session uint64, stopChan chan
 	}
 
 	s.mu.Lock()
-	if s.session.Load() == session && s.reader == reader {
-		s.player.ClearSource()
+	stale := s.session.Load() != session
+	stillCurrent := s.reader == reader
+	if !stale && stillCurrent {
 		s.reader = nil
 	}
 	s.mu.Unlock()
+
+	if !stale && stillCurrent {
+		s.player.ClearSource()
+	}
 
 	return err
 }
