@@ -28,6 +28,9 @@ func newCrossfade(outgoing, incoming beep.Streamer, sr beep.SampleRate) *crossfa
 }
 
 func crossfadeGains(step, steps int) (outGain, inGain float64) {
+	if steps <= 1 {
+		return 0, 1
+	}
 	t := float64(step) / float64(steps-1)
 	if t > 1 {
 		t = 1
@@ -46,13 +49,13 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 	var outN int
 	var outOk bool
 	if c.outgoing != nil {
-		outN, outOk = c.outgoing.Stream(outBuf)
+		outN, outOk = streamNonBlocking(c.outgoing, outBuf)
 		if outN == 0 && !outOk {
 			c.outgoing = nil
 		}
 	}
 
-	inN, inOk := c.incoming.Stream(inBuf)
+	inN, inOk := streamNonBlocking(c.incoming, inBuf)
 
 	for i := range samples {
 		outGain, inGain := crossfadeGains(c.step, c.steps)

@@ -91,6 +91,22 @@ func (a *aheadStreamer) Stream(samples [][2]float64) (int, bool) {
 	return n, true
 }
 
+// TryStream returns buffered PCM without blocking. ok is false only when the stream has ended.
+func (a *aheadStreamer) TryStream(samples [][2]float64) (int, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.buf) == 0 {
+		if a.eof || a.closed {
+			return 0, false
+		}
+		return 0, true
+	}
+	n := copy(samples, a.buf)
+	a.buf = a.buf[n:]
+	a.cond.Signal()
+	return n, true
+}
+
 func (a *aheadStreamer) Err() error {
 	return a.src.Err()
 }
