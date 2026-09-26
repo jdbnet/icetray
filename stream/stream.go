@@ -390,7 +390,7 @@ func (s *Supervisor) supervise(stopChan chan struct{}, session uint64) {
 		url := s.streamURL
 		s.mu.RUnlock()
 
-		err := s.attemptConnection(url, session, stopChan)
+		err := s.attemptConnection(url, s.session.Load(), stopChan, nil)
 		if err != nil {
 			logger.LogError("Stream connection lost", err)
 		}
@@ -408,8 +408,38 @@ func (s *Supervisor) supervise(stopChan chan struct{}, session uint64) {
 	}
 }
 
+// SwitchStream changes the stream URL while keeping the player running for crossfade.
+func (s *Supervisor) SwitchStream(streamURL string) {
+	if !s.isRunning.Load() {
+		s.Start(streamURL)
+		return
+	}
+
+	s.mu.Lock()
+	oldReader := s.reader
+	s.streamURL = streamURL
+	s.session.Add(1)
+	session := s.session.Load()
+	stopChan := s.stopChan
+	s.mu.Unlock()
+
+	s.backoff = time.Second
+	go s.attemptConnection(streamURL, session, stopChan, oldReader)
+}
+
 // attemptConnection tries to connect and read from the stream.
-func (s *Supervisor) attemptConnection(url string, session uint64, stopChan chan struct{}) error {
+func (s *Supervisor) attemptConnection(url string, session uint64, stopChan chan struct{}, retire *StreamReader) error {
+	if s.session.Load() != session {
+		return nil
+	}
+
+	s.mu.Lock()
+	if retire == nil && s.reader != nil && s.reader.IsConnected() {
+		s.mu.Unlock()
+		return nil
+	}
+	s.mu.Unlock()
+
 	reader := NewStreamReader(url, 1024*1024) // 1MB buffer
 	reader.onConnect = func() {
 		if s.session.Load() != session {
@@ -417,6 +447,11 @@ func (s *Supervisor) attemptConnection(url string, session uint64, stopChan chan
 		}
 		// SetSource releases the player lock before touching the speaker so we
 		// never block HTTP reads while waiting on the audio thread.
+		if retire != nil {
+			s.player.SetHandoffRetire(func() {
+				retire.Stop()
+			})
+		}
 		s.player.SetSource(reader.GetBuffer())
 	}
 	s.mu.Lock()

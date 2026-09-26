@@ -61,7 +61,10 @@ type Player struct {
 	sourceGen      uint64
 	ctrl           *beep.Ctrl
 	volumeEffect   *effects.Volume
-	stateListeners []func()
+	smoothFader    *smoothFader
+	pendingHandoff *streamHandoff
+	handoffRetire    func()
+	stateListeners   []func()
 	sourceWorkers  atomic.Int32
 }
 
@@ -134,26 +137,45 @@ func (p *Player) SetSource(buf StreamBuffer) {
 		return
 	}
 
-	p.stopActiveStreamLocked()
+	retireOutgoing := p.handoffRetire
+	p.handoffRetire = nil
+	handoff := p.detachActivePlayback()
+	if handoff != nil && retireOutgoing != nil {
+		handoff.retireOutgoing = retireOutgoing
+	}
+	p.sourceGen++
 	gen := p.sourceGen
 	p.activeBuf = buf
 	cancel := make(chan struct{})
 	p.activeCancel = cancel
+	p.pendingHandoff = handoff
 	p.mu.Unlock()
 
-	p.clearSpeaker()
 	go p.playSource(buf, cancel, gen)
 }
 
 // ClearSource stops any active playback stream but keeps running state.
 func (p *Player) ClearSource() {
 	p.mu.Lock()
+	oldFader := p.smoothFader
+	p.smoothFader = nil
 	p.stopActiveStreamLocked()
 	p.mu.Unlock()
-	p.clearSpeaker()
+	p.fadeOutAndClearOutput(oldFader, true)
 }
 
-func (p *Player) clearSpeaker() {
+// fadeOutAndClearOutput stops playback. waitForFade is false on app shutdown to avoid blocking quit.
+func (p *Player) fadeOutAndClearOutput(old *smoothFader, waitForFade bool) {
+	if old != nil {
+		lockOutput()
+		old.Stop()
+		unlockOutput()
+		if waitForFade {
+			time.Sleep(CrossfadeDuration() + 50*time.Millisecond)
+		} else {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 	clearOutput()
 }
 
@@ -169,6 +191,7 @@ func (p *Player) stopActiveStreamLocked() {
 	p.activeBuf = nil
 	p.ctrl = nil
 	p.volumeEffect = nil
+	p.smoothFader = nil
 
 	if p.audioActive {
 		p.audioActive = false
@@ -328,9 +351,14 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 
 	var output beep.Streamer = volumeEffect
 	if format.SampleRate != speakerSampleRate {
-		output = beep.Resample(4, format.SampleRate, speakerSampleRate, volumeEffect)
+		output = beep.Resample(6, format.SampleRate, speakerSampleRate, volumeEffect)
 	}
-	output = newFadeIn(output, speakerSampleRate, 150*time.Millisecond)
+	cancelled := func() bool {
+		return attachCancelled(cancel, nil) || p.sourceStale(gen)
+	}
+	if !warmupStreamer(output, warmupSamples(), cancelled) {
+		return nil, false
+	}
 	output = bufferPlayback(output)
 
 	var stopFill func()
@@ -344,20 +372,47 @@ func (p *Player) beginSpeakerPlayback(streamer beep.StreamSeekCloser, format bee
 	}
 
 	p.mu.Lock()
+	handoff := p.pendingHandoff
+	p.pendingHandoff = nil
+	if p.sourceGen != gen || !p.isRunning {
+		p.mu.Unlock()
+		return nil, false
+	}
+	p.mu.Unlock()
+
+	var fader *smoothFader
+	if handoff != nil && handoff.ctrl != nil {
+		fader = newSmoothFaderNoFadeIn(output, speakerSampleRate)
+	} else {
+		fader = newSmoothFader(output, speakerSampleRate)
+	}
+
+	p.mu.Lock()
 	if p.sourceGen != gen || !p.isRunning {
 		p.mu.Unlock()
 		return nil, false
 	}
 	isPaused := p.isPaused
 	ctrl := &beep.Ctrl{
-		Streamer: output,
+		Streamer: fader,
 		Paused:   isPaused,
 	}
 	p.ctrl = ctrl
 	p.volumeEffect = volumeEffect
+	p.smoothFader = fader
+
+	var toPlay beep.Streamer = ctrl
+	var retire *streamHandoff
+	if handoff != nil && handoff.ctrl != nil {
+		toPlay = newCrossfade(handoff.ctrl, ctrl, speakerSampleRate)
+		retire = handoff
+	}
 	p.mu.Unlock()
 
-	playOutput(ctrl)
+	replaceOutput(toPlay)
+	if retire != nil {
+		go p.finishHandoff(retire, gen)
+	}
 	logger.Log("playSource: speaker playback started")
 
 	p.mu.Lock()
@@ -413,12 +468,14 @@ func (p *Player) Stop() error {
 		return nil
 	}
 
+	oldFader := p.smoothFader
+	p.smoothFader = nil
 	p.stopActiveStreamLocked()
 	p.isRunning = false
 	p.isPaused = false
 	p.mu.Unlock()
 
-	p.clearSpeaker()
+	p.fadeOutAndClearOutput(oldFader, false)
 	logger.Log("Stop: playback stopped")
 	go p.notifyStateChange()
 	return nil

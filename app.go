@@ -48,8 +48,9 @@ type SettingsView struct {
 	Autoplay        bool   `json:"autoplay"`
 	LaunchOnLogin   bool   `json:"launchOnLogin"`
 	LaunchMinimized bool   `json:"launchMinimized"`
-	Volume          int    `json:"volume"`
-	Desktop         bool   `json:"desktop"`
+	Volume           int `json:"volume"`
+	CrossfadeSeconds int `json:"crossfadeSeconds"`
+	Desktop          bool   `json:"desktop"`
 	Version         string `json:"version"`
 }
 
@@ -81,7 +82,12 @@ func NewApp(cfg *config.Config, p *player.Player, sup *stream.Supervisor, sm sta
 		startupMgr: sm,
 	}
 	p.AddStateChangeListener(a.emitPlaybackState)
+	a.applyCrossfadeFromConfig()
 	return a
+}
+
+func (a *App) applyCrossfadeFromConfig() {
+	player.SetCrossfadeDuration(time.Duration(a.cfg.GetCrossfadeSeconds()) * time.Second)
 }
 
 func (a *App) setWindow(window application.Window) {
@@ -381,6 +387,18 @@ func (a *App) playStreamLocked(id string) error {
 		return nil
 	}
 
+	if a.supervisor.IsRunning() && a.player.IsRunning() && a.currentID != "" {
+		a.stopMetadataPoller()
+		a.supervisor.SwitchStream(s.URL)
+		_ = a.cfg.SetLastStreamID(id)
+		a.currentID = id
+		a.castPaused = false
+		a.handoffPaused = false
+		a.startMetadataPoller(s.URL)
+		a.emitPlaybackState()
+		return nil
+	}
+
 	a.stopPlaybackLocked()
 
 	if err := a.player.Play(s.URL); err != nil {
@@ -568,8 +586,9 @@ func (a *App) GetSettings() SettingsView {
 		Autoplay:        a.cfg.GetAutoplay(),
 		LaunchOnLogin:   a.cfg.GetLaunchOnLogin(),
 		LaunchMinimized: a.cfg.GetLaunchMinimized(),
-		Volume:          a.cfg.GetVolume(),
-		Desktop:         runtime.GOOS != "android",
+		Volume:           a.cfg.GetVolume(),
+		CrossfadeSeconds: a.cfg.GetCrossfadeSeconds(),
+		Desktop:          runtime.GOOS != "android",
 		Version:         appVersion(),
 	}
 }
@@ -596,6 +615,15 @@ func (a *App) SetLaunchOnLogin(enabled bool) error {
 // SetLaunchMinimized toggles whether the player window starts hidden (desktop tray only).
 func (a *App) SetLaunchMinimized(enabled bool) error {
 	return a.cfg.SetLaunchMinimized(enabled)
+}
+
+// SetCrossfadeSeconds sets stream crossfade duration (0–8 seconds).
+func (a *App) SetCrossfadeSeconds(seconds int) error {
+	if err := a.cfg.SetCrossfadeSeconds(seconds); err != nil {
+		return err
+	}
+	a.applyCrossfadeFromConfig()
+	return nil
 }
 
 // GetNowPlaying returns the latest metadata snapshot.

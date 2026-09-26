@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	playbackAheadDuration = 250 * time.Millisecond
-	playbackReadyDuration = 120 * time.Millisecond
+	playbackAheadDuration = 350 * time.Millisecond
+	playbackReadyDuration = 200 * time.Millisecond
 	playbackReadyTimeout  = 3 * time.Second
 )
 

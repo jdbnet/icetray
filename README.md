@@ -12,6 +12,7 @@
 - **Modern player UI**: Stream library, artwork, volume, and now playing info
 - **Desktop system tray**: Background playback with Play, Pause and Stop
 - **Embedded audio engine**: Powered by `gopxl/beep` with internal buffering for network hiccups
+- **Configurable stream crossfade**: Blend between stations when you switch (0–8 seconds, adjustable in Settings)
 - **Android media session**: Kotlin `MediaSessionService` for notification, lock-screen, and Bluetooth controls
 - **Icecast metadata**: Best-effort now playing via `/admin/publicstats.json` (Icecast 2.5+) with legacy `status-json.xsl` and ICY stream fallback
 - **Stream artwork**: Upload images stored locally on each device

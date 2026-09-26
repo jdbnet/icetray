@@ -21,6 +21,15 @@ func clearOutput() {
 	speaker.Clear()
 }
 
+func handoffClearOutput() {
+	speaker.Clear()
+}
+
+func replaceOutput(src beep.Streamer) {
+	speaker.Clear()
+	speaker.Play(src)
+}
+
 func lockOutput() {
 	speaker.Lock()
 }

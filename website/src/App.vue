@@ -20,6 +20,10 @@ const features = [
     text: 'Powered by gopxl/beep with buffering for network hiccups.',
   },
   {
+    title: 'Configurable stream crossfade',
+    text: 'Smooth blends when you change stations. Set the duration from 0–8 seconds in Settings.',
+  },
+  {
     title: 'Android media session',
     text: 'Notification, lock screen, and Bluetooth controls on Android.',
   },

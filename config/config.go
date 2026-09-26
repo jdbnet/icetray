@@ -27,6 +27,7 @@ type Config struct {
 	Volume           int  `json:"volume"`
 	LaunchOnLogin    bool `json:"launch_on_login"`
 	LaunchMinimized  bool `json:"launch_minimized"`
+	CrossfadeSeconds int  `json:"crossfade_seconds"`
 
 	configPath string
 	imagesDir  string
@@ -42,7 +43,8 @@ func LoadConfig(configDir string) (*Config, error) {
 		configPath: configPath,
 		imagesDir:  imagesDir,
 		Streams:    []Stream{},
-		Volume:     50,
+		Volume:           50,
+		CrossfadeSeconds: 2,
 	}
 
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
@@ -371,4 +373,34 @@ func (c *Config) GetLaunchMinimized() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.LaunchMinimized
+}
+
+// SetCrossfadeSeconds sets stream crossfade duration (0–8 seconds) and saves the config.
+func (c *Config) SetCrossfadeSeconds(seconds int) error {
+	c.mu.Lock()
+	if seconds < 0 {
+		seconds = 0
+	} else if seconds > 8 {
+		seconds = 8
+	}
+	c.CrossfadeSeconds = seconds
+	c.mu.Unlock()
+	return c.Save()
+}
+
+// GetCrossfadeSeconds returns the stream crossfade duration in seconds.
+func (c *Config) GetCrossfadeSeconds() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return clampCrossfadeSeconds(c.CrossfadeSeconds)
+}
+
+func clampCrossfadeSeconds(seconds int) int {
+	if seconds < 0 {
+		return 0
+	}
+	if seconds > 8 {
+		return 8
+	}
+	return seconds
 }

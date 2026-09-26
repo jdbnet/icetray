@@ -118,18 +118,19 @@ func initOutput() error {
 func playOutput(src beep.Streamer) {
 	outMu.Lock()
 	defer outMu.Unlock()
-	if outReader != nil {
-		outReader.set(nil, false)
-	}
-	stopPlayerLocked()
 	resumeOutputLocked()
-	reader := &pcmReader{}
-	reader.set(src, false)
-	outReader = reader
-	player := otoCtx.NewPlayer(reader)
-	player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
-	outPlayer = player
-	player.Play()
+	if outReader == nil {
+		outReader = &pcmReader{}
+	}
+	outReader.set(src, false)
+	if outPlayer == nil {
+		player := otoCtx.NewPlayer(outReader)
+		player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
+		outPlayer = player
+		player.Play()
+		return
+	}
+	outPlayer.Play()
 }
 
 func clearOutput() {
@@ -140,6 +141,32 @@ func clearOutput() {
 	}
 	stopPlayerLocked()
 	suspendOutputLocked()
+}
+
+func handoffClearOutput() {
+	outMu.Lock()
+	defer outMu.Unlock()
+	if outReader != nil {
+		outReader.set(nil, false)
+	}
+}
+
+func replaceOutput(src beep.Streamer) {
+	outMu.Lock()
+	defer outMu.Unlock()
+	resumeOutputLocked()
+	if outReader == nil {
+		outReader = &pcmReader{}
+	}
+	outReader.set(src, false)
+	if outPlayer == nil {
+		player := otoCtx.NewPlayer(outReader)
+		player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
+		outPlayer = player
+		player.Play()
+		return
+	}
+	outPlayer.Play()
 }
 
 func stopPlayerLocked() {

@@ -34,6 +34,7 @@ import {
   ReorderStreams,
   Resume,
   SetAutoplay,
+  SetCrossfadeSeconds,
   SetLaunchMinimized,
   SetLaunchOnLogin,
   SetVolume,
@@ -59,6 +60,7 @@ const settings = ref<SettingsView>({
   launchOnLogin: false,
   launchMinimized: false,
   volume: 80,
+  crossfadeSeconds: 2,
   desktop: true,
   version: '',
 })
@@ -384,6 +386,12 @@ async function setLaunchMinimized(enabled: boolean) {
   settings.value.launchMinimized = enabled
 }
 
+async function onCrossfadeInput(event: Event) {
+  const value = Number((event.target as HTMLInputElement).value)
+  settings.value.crossfadeSeconds = value
+  await SetCrossfadeSeconds(value)
+}
+
 function isDialogCancelled(err: unknown): boolean {
   const msg = (err as { message?: string })?.message ?? ''
   return msg.toLowerCase().includes('cancel')
@@ -548,6 +556,30 @@ onUnmounted(() => {
             />
             <span class="setting-switch-track" />
           </label>
+        </div>
+        <div class="setting-row flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="setting-copy">
+            <p class="setting-title">Stream crossfade</p>
+            <p class="setting-desc">
+              How long to blend between stations when you switch streams (0–8 seconds).
+            </p>
+          </div>
+          <div class="flex w-full items-center gap-3 sm:w-52 sm:shrink-0">
+            <input
+              type="range"
+              min="0"
+              max="8"
+              step="1"
+              :value="settings.crossfadeSeconds"
+              class="w-full accent-emerald-400"
+              :title="`Crossfade ${settings.crossfadeSeconds}s`"
+              :aria-label="`Crossfade ${settings.crossfadeSeconds} seconds`"
+              @input="onCrossfadeInput"
+            />
+            <span class="w-8 shrink-0 text-right font-mono text-sm text-zinc-400"
+              >{{ settings.crossfadeSeconds }}s</span
+            >
+          </div>
         </div>
         <div v-if="settings.desktop" class="setting-row">
           <div class="setting-copy">

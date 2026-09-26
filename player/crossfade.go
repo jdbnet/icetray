@@ -1,0 +1,95 @@
+package player
+
+import (
+	"math"
+
+	"github.com/gopxl/beep"
+)
+
+// crossfadeStreamer mixes outgoing and incoming audio with complementary cos/sin gains.
+type crossfadeStreamer struct {
+	outgoing beep.Streamer
+	incoming beep.Streamer
+	step     int
+	steps    int
+}
+
+func newCrossfade(outgoing, incoming beep.Streamer, sr beep.SampleRate) *crossfadeStreamer {
+	d := CrossfadeDuration()
+	steps := sr.N(d)
+	if steps < 1 {
+		steps = 1
+	}
+	return &crossfadeStreamer{
+		outgoing: outgoing,
+		incoming: incoming,
+		steps:    steps,
+	}
+}
+
+func crossfadeGains(step, steps int) (outGain, inGain float64) {
+	t := float64(step) / float64(steps-1)
+	if t > 1 {
+		t = 1
+	}
+	return math.Cos(0.5 * math.Pi * t), math.Sin(0.5 * math.Pi * t)
+}
+
+func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
+	if c.incoming == nil {
+		return 0, false
+	}
+
+	outBuf := make([][2]float64, len(samples))
+	inBuf := make([][2]float64, len(samples))
+
+	var outN int
+	var outOk bool
+	if c.outgoing != nil {
+		outN, outOk = c.outgoing.Stream(outBuf)
+		if outN == 0 && !outOk {
+			c.outgoing = nil
+		}
+	}
+
+	inN, inOk := c.incoming.Stream(inBuf)
+
+	for i := range samples {
+		outGain, inGain := crossfadeGains(c.step, c.steps)
+		if c.outgoing == nil {
+			outGain = 0
+			inGain = 1
+		}
+
+		var o0, o1 float64
+		if i < outN {
+			o0, o1 = outBuf[i][0], outBuf[i][1]
+		}
+		var i0, i1 float64
+		if i < inN {
+			i0, i1 = inBuf[i][0], inBuf[i][1]
+		}
+
+		samples[i][0] = o0*outGain + i0*inGain
+		samples[i][1] = o1*outGain + i1*inGain
+		c.step++
+		if c.step >= c.steps {
+			c.outgoing = nil
+		}
+	}
+
+	ok := inOk || outOk || c.outgoing != nil
+	return len(samples), ok
+}
+
+func (c *crossfadeStreamer) Err() error {
+	if c.incoming != nil {
+		if err := c.incoming.Err(); err != nil {
+			return err
+		}
+	}
+	if c.outgoing != nil {
+		return c.outgoing.Err()
+	}
+	return nil
+}

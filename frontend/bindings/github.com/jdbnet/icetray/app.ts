@@ -145,6 +145,13 @@ export function SetCasting(enabled: boolean): $CancellablePromise<void> {
 }
 
 /**
+ * SetCrossfadeSeconds sets stream crossfade duration (0–8 seconds).
+ */
+export function SetCrossfadeSeconds(seconds: number): $CancellablePromise<void> {
+    return $Call.ByID(2794510540, seconds);
+}
+
+/**
  * SetLaunchMinimized toggles whether the player window starts hidden (desktop tray only).
  */
 export function SetLaunchMinimized(enabled: boolean): $CancellablePromise<void> {

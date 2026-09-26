@@ -27,6 +27,7 @@ export interface SettingsView {
     "launchOnLogin": boolean;
     "launchMinimized": boolean;
     "volume": number;
+    "crossfadeSeconds": number;
     "desktop": boolean;
     "version": string;
 }
