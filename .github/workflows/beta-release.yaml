@@ -36,36 +36,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure beta semantic release
-        run: |
-          LATEST="$(git tag -l 'v*' --sort=-v:refname | grep -Ev -- '-(beta|alpha|rc)' | head -1 || true)"
-          LATEST="${LATEST#v}"
-          if [ -z "$LATEST" ]; then
-            MAJOR=0
-          else
-            MAJOR="${LATEST%%.*}"
-          fi
-          cat > .semrelrc <<EOF
-          {
-            "maintainedVersion": "${MAJOR}-beta",
-            "plugins": {
-              "provider": {
-                "name": "github",
-                "options": {
-                  "prerelease": true
-                }
-              }
-            }
-          }
-          EOF
-          cat .semrelrc
-
       - id: semantic
         uses: go-semantic-release/action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          prerelease: true
-          custom-arguments: --allow-maintained-version-on-default-branch
 
   build-amd64:
     needs: version
