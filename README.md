@@ -15,6 +15,7 @@
 - **Android media session**: Kotlin `MediaSessionService` for notification, lock-screen, and Bluetooth controls
 - **Icecast metadata**: Best-effort now playing via `/admin/publicstats.json` (Icecast 2.5+) with legacy `status-json.xsl` and ICY stream fallback
 - **Stream artwork**: Upload images stored locally on each device
+- **Import and export**: Back up or move your station library and artwork as a single `.zip` across desktop and Android
 - **Autoplay**: Optional playback when the app launches
 - **Headless mode**: Terminal-only binary for servers (`--stream` flag)
 
@@ -72,7 +73,7 @@ Download `icetray-macos-universal.zip` from [Releases](https://github.com/jdbnet
 First launch: right-click **icetray** and choose **Open**, or allow the app in **System Settings → Privacy & Security** if Gatekeeper blocks it. If needed:
 
 ```bash
-xattr -dr com.apple.quarantine ~/Applications/icetray.app
+xattr -dr com.apple.quarantine /Applications/icetray.app
 ```
 
 Build locally on a Mac:

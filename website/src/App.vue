@@ -28,6 +28,10 @@ const features = [
     text: 'Now playing via public stats, legacy JSON, and ICY fallbacks.',
   },
   {
+    title: 'Import and export',
+    text: 'Back up or move stations and artwork as one .zip across desktop and Android.',
+  },
+  {
     title: 'Headless mode',
     text: 'Terminal-only binary for servers with a simple --stream flag.',
   },
@@ -231,7 +235,7 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
                 <li>
                   If the app still will not open, remove quarantine:
                   <code class="block mt-1 rounded bg-zinc-950 px-2 py-1 text-xs text-zinc-300"
-                  >xattr -dr com.apple.quarantine ~/Applications/icetray.app</code>
+                  >xattr -dr com.apple.quarantine /Applications/icetray.app</code>
                 </li>
               </ol>
             </div>
