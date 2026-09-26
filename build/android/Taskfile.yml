@@ -29,6 +29,11 @@ vars:
     sh: 'command -v avdmanager || ls "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$([ -d "$HOME/Library/Android/sdk" ] && echo "$HOME/Library/Android/sdk" || echo "$HOME/Android/Sdk")}}"/cmdline-tools/*/bin/avdmanager 2>/dev/null | sort -V | tail -1 || true'
 
 tasks:
+  typecheck:player:
+    summary: Typecheck the player package with Android build tags (requires NDK)
+    cmds:
+      - bash scripts/typecheck-android-player.sh
+
   install:deps:
     summary: Check and install Android development dependencies
     cmds:

@@ -74,6 +74,16 @@ func (r *androidOutputRelay) Stream(samples [][2]float64) (int, bool) {
 	return n, ok
 }
 
+func (r *androidOutputRelay) Err() error {
+	r.mu.Lock()
+	src := r.src
+	r.mu.Unlock()
+	if src == nil {
+		return nil
+	}
+	return src.Err()
+}
+
 type pcmReader struct {
 	mu     sync.Mutex
 	src    beep.Streamer
