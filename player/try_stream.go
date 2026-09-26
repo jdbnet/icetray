@@ -33,9 +33,6 @@ func streamNonBlocking(s beep.Streamer, samples [][2]float64) (int, bool) {
 		if st, ok := s.(*aheadStreamer); ok {
 			return st.TryStream(samples)
 		}
-		if st, ok := s.(*crossfadeStreamer); ok {
-			return st.Stream(samples)
-		}
 		if t, ok := s.(tryStreamer); ok {
 			return t.TryStream(samples)
 		}

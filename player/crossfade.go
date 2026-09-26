@@ -46,6 +46,10 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 	outBuf := make([][2]float64, len(samples))
 	inBuf := make([][2]float64, len(samples))
 
+	// Pull incoming first so Android's synchronous Oto read is not blocked on an
+	// empty outgoing ahead-buffer during station handoff.
+	inN, inOk := c.incoming.Stream(inBuf)
+
 	var outN int
 	var outOk bool
 	if c.outgoing != nil {
@@ -54,8 +58,6 @@ func (c *crossfadeStreamer) Stream(samples [][2]float64) (int, bool) {
 			c.outgoing = nil
 		}
 	}
-
-	inN, inOk := streamNonBlocking(c.incoming, inBuf)
 
 	for i := range samples {
 		outGain, inGain := crossfadeGains(c.step, c.steps)

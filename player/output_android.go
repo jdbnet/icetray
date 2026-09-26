@@ -28,48 +28,20 @@ var (
 	outMu        sync.Mutex
 	outPlayer    *oto.Player
 	outReader    *pcmReader
-	androidOut   = &androidOutputMixer{}
 )
-
-// androidOutputMixer holds the active beep streamer so Oto can keep one player alive across station changes.
-type androidOutputMixer struct {
-	mu  sync.Mutex
-	src beep.Streamer
-}
-
-func (m *androidOutputMixer) set(src beep.Streamer) {
-	m.mu.Lock()
-	m.src = src
-	m.mu.Unlock()
-}
-
-func (m *androidOutputMixer) Stream(samples [][2]float64) (int, bool) {
-	m.mu.Lock()
-	src := m.src
-	m.mu.Unlock()
-	if src == nil {
-		for i := range samples {
-			samples[i] = [2]float64{}
-		}
-		return len(samples), false
-	}
-	n, ok := streamNonBlocking(src, samples)
-	if n < len(samples) {
-		for i := n; i < len(samples); i++ {
-			samples[i] = [2]float64{}
-		}
-		n = len(samples)
-	}
-	if n == 0 {
-		return len(samples), ok
-	}
-	return n, ok
-}
 
 type pcmReader struct {
 	mu     sync.Mutex
+	src    beep.Streamer
 	paused bool
 	buf    [][2]float64
+}
+
+func (r *pcmReader) set(src beep.Streamer, paused bool) {
+	r.mu.Lock()
+	r.src = src
+	r.paused = paused
+	r.mu.Unlock()
 }
 
 func (r *pcmReader) setPaused(paused bool) {
@@ -84,8 +56,13 @@ func (r *pcmReader) Read(p []byte) (int, error) {
 		return 0, nil
 	}
 	r.mu.Lock()
+	src := r.src
 	paused := r.paused
 	r.mu.Unlock()
+	if src == nil {
+		clear(p)
+		return frames * outputBytesPerFrame, nil
+	}
 	if paused {
 		clear(p)
 		return frames * outputBytesPerFrame, nil
@@ -95,16 +72,13 @@ func (r *pcmReader) Read(p []byte) (int, error) {
 	} else {
 		r.buf = r.buf[:frames]
 	}
-	n, _ := androidOut.Stream(r.buf)
-	if n < frames {
-		for i := n; i < frames; i++ {
-			r.buf[i] = [2]float64{}
-		}
-		n = frames
-	}
+	n, ok := src.Stream(r.buf)
 	if n == 0 {
-		clear(p[:frames*outputBytesPerFrame])
-		return frames * outputBytesPerFrame, nil
+		if !ok {
+			clear(p[:frames*outputBytesPerFrame])
+			return frames * outputBytesPerFrame, nil
+		}
+		return 0, nil
 	}
 	out := p[:n*outputBytesPerFrame]
 	for i := 0; i < n; i++ {
@@ -142,29 +116,30 @@ func initOutput() error {
 	return otoErr
 }
 
-func ensureAndroidPlayer() {
-	if outPlayer != nil {
-		return
-	}
-	outReader = &pcmReader{}
-	player := otoCtx.NewPlayer(outReader)
-	player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
-	outPlayer = player
-	player.Play()
-}
-
 func playOutput(src beep.Streamer) {
 	outMu.Lock()
 	defer outMu.Unlock()
 	resumeOutputLocked()
-	androidOut.set(src)
-	ensureAndroidPlayer()
+	if outReader == nil {
+		outReader = &pcmReader{}
+	}
+	outReader.set(src, false)
+	if outPlayer == nil {
+		player := otoCtx.NewPlayer(outReader)
+		player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
+		outPlayer = player
+		player.Play()
+		return
+	}
+	outPlayer.Play()
 }
 
 func clearOutput() {
 	outMu.Lock()
 	defer outMu.Unlock()
-	androidOut.set(nil)
+	if outReader != nil {
+		outReader.set(nil, false)
+	}
 	stopPlayerLocked()
 	suspendOutputLocked()
 }
@@ -172,15 +147,28 @@ func clearOutput() {
 func handoffClearOutput() {
 	outMu.Lock()
 	defer outMu.Unlock()
-	androidOut.set(nil)
+	if outReader != nil {
+		outReader.set(nil, false)
+	}
 }
 
 func replaceOutput(src beep.Streamer) {
 	outMu.Lock()
 	defer outMu.Unlock()
 	resumeOutputLocked()
-	androidOut.set(src)
-	ensureAndroidPlayer()
+	if outReader == nil {
+		outReader = &pcmReader{}
+	}
+	outReader.set(src, false)
+	if outPlayer == nil {
+		player := otoCtx.NewPlayer(outReader)
+		player.SetBufferSize(int(speakerSampleRate) * outputBytesPerFrame)
+		outPlayer = player
+		player.Play()
+		return
+	}
+	outPlayer.Reset()
+	outPlayer.Play()
 }
 
 func stopPlayerLocked() {
