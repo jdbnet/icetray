@@ -11,11 +11,17 @@ internal object PlaybackSessionHub {
     var latest: JSONObject? = null
         private set
 
+    @Volatile
+    private var castPickerOpen = false
+
     fun dispatch(payload: JSONObject) {
         latest = payload
         if (payload.optBoolean("casting", false)) {
             CastCoordinator.onSessionPayload(payload)
             PlaybackService.dismissForCast()
+            return
+        }
+        if (castPickerOpen) {
             return
         }
         PlaybackService.applyExternalUpdate(payload)
@@ -42,11 +48,13 @@ internal object PlaybackSessionHub {
      * the Cast picker is visible; local audio is ExoPlayer inside PlaybackService.
      */
     fun releaseLocalMediaSessionForCastPicker() {
+        castPickerOpen = true
         PlaybackService.dismissForCast()
     }
 
     /** Restore notification media controls if the user closed the picker without connecting. */
     fun restoreLocalMediaSessionAfterCastPicker() {
+        castPickerOpen = false
         val payload = latest ?: return
         if (payload.optBoolean("casting", false)) {
             return

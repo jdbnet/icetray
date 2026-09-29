@@ -33,8 +33,10 @@ class ExoPlayback(context: Context) {
     private var fadeGeneration = 0
     private var fadeRunnable: Runnable? = null
 
-    fun apply(playing: Boolean, paused: Boolean, url: String, crossfadeMs: Int) {
-        if (url.isBlank() || (!playing && !paused)) {
+    fun apply(playing: Boolean, paused: Boolean, loading: Boolean, url: String, crossfadeMs: Int) {
+        // The Go side reports loading before ExoPlayer has reached READY, so playing is still false.
+        val active = playing || loading
+        if (url.isBlank() || (!active && !paused)) {
             releaseAll()
             return
         }
@@ -128,17 +130,7 @@ class ExoPlayback(context: Context) {
             .build()
         player.setAudioAttributes(mediaAttributes(), false)
         player.setWakeMode(C.WAKE_MODE_NETWORK)
-        player.setMediaItem(
-            MediaItem.Builder()
-                .setUri(Uri.parse(url))
-                .setLiveConfiguration(
-                    MediaItem.LiveConfiguration.Builder()
-                        .setTargetOffsetMs(3_000)
-                        .setMaxPlaybackSpeed(1.02f)
-                        .build(),
-                )
-                .build(),
-        )
+        player.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY && current === player && outgoing == null) {

@@ -142,6 +142,7 @@ class PlaybackService : MediaSessionService() {
                 exo?.apply(
                     playing = playing,
                     paused = paused,
+                    loading = loading,
                     url = payload.optString("streamUrl"),
                     crossfadeMs = payload.optInt("crossfadeMs", 2000),
                 )
