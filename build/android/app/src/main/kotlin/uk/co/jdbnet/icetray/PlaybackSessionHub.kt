@@ -47,9 +47,9 @@ internal object PlaybackSessionHub {
      * can prevent Cast route discovery from presenting devices. Drop the foreground session while
      * the Cast picker is visible; local audio is ExoPlayer inside PlaybackService.
      */
-    fun releaseLocalMediaSessionForCastPicker() {
+    fun releaseLocalMediaSessionForCastPicker(onReleased: () -> Unit = {}) {
         castPickerOpen = true
-        PlaybackService.dismissForCast()
+        PlaybackService.dismissForCastPicker(onReleased)
     }
 
     /** Restore notification media controls if the user closed the picker without connecting. */

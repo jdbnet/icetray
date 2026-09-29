@@ -152,8 +152,19 @@ object CastCoordinator {
         ensureSessionListener(castContext)
         val alreadyConnected = connected
         if (!alreadyConnected) {
-            PlaybackSessionHub.releaseLocalMediaSessionForCastPicker()
+            PlaybackSessionHub.releaseLocalMediaSessionForCastPicker {
+                activity.runOnUiThread {
+                    if (!activity.isFinishing) {
+                        presentCastDialog(activity, castContext, alreadyConnected = false)
+                    }
+                }
+            }
+            return
         }
+        presentCastDialog(activity, castContext, alreadyConnected = true)
+    }
+
+    private fun presentCastDialog(activity: Activity, castContext: CastContext, alreadyConnected: Boolean) {
         val session = castContext.sessionManager.currentCastSession
         val selector = castContext.mergedSelector
         if (session != null && session.isConnected) {
