@@ -39,7 +39,7 @@ internal object PlaybackSessionHub {
     /**
      * Media3 1.11 keeps an active MediaSession while IceTray is playing locally. That session
      * can prevent Cast route discovery from presenting devices. Drop the foreground session while
-     * the Cast picker is visible; local audio still comes from the Go/oto pipeline.
+     * the Cast picker is visible; local audio is ExoPlayer inside PlaybackService.
      */
     fun releaseLocalMediaSessionForCastPicker() {
         PlaybackService.dismissForCast()

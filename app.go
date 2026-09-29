@@ -45,13 +45,13 @@ type PlaybackState struct {
 
 // SettingsView exposes app settings to the frontend.
 type SettingsView struct {
-	Autoplay        bool   `json:"autoplay"`
-	LaunchOnLogin   bool   `json:"launchOnLogin"`
-	LaunchMinimized bool   `json:"launchMinimized"`
-	Volume           int `json:"volume"`
-	CrossfadeSeconds int `json:"crossfadeSeconds"`
+	Autoplay         bool   `json:"autoplay"`
+	LaunchOnLogin    bool   `json:"launchOnLogin"`
+	LaunchMinimized  bool   `json:"launchMinimized"`
+	Volume           int    `json:"volume"`
+	CrossfadeSeconds int    `json:"crossfadeSeconds"`
 	Desktop          bool   `json:"desktop"`
-	Version         string `json:"version"`
+	Version          string `json:"version"`
 }
 
 // App is the Wails application binding layer.
@@ -71,6 +71,16 @@ type App struct {
 	casting       bool
 	castPaused    bool
 	handoffPaused bool
+	// androidPlayback is the local play/pause/loading state when Android uses ExoPlayer
+	// instead of the beep/oto engine.
+	androidPlayback androidLocalPlayback
+}
+
+// androidLocalPlayback tracks ExoPlayer intent on Android. Desktop leaves it zero.
+type androidLocalPlayback struct {
+	running bool
+	paused  bool
+	loading bool
 }
 
 // NewApp creates the Wails app bindings.
@@ -387,6 +397,10 @@ func (a *App) playStreamLocked(id string) error {
 		return nil
 	}
 
+	if runtime.GOOS == "android" {
+		return a.playStreamAndroidLocked(s, id)
+	}
+
 	if a.supervisor.IsRunning() && a.player.IsRunning() && a.currentID != "" {
 		a.stopMetadataPoller()
 		a.supervisor.SwitchStream(s.URL)
@@ -432,6 +446,15 @@ func (a *App) Pause() error {
 		return nil
 	}
 
+	if runtime.GOOS == "android" {
+		if !a.androidPlayback.running || a.androidPlayback.paused {
+			return nil
+		}
+		a.androidPlayback.paused = true
+		a.emitPlaybackState()
+		return nil
+	}
+
 	if err := a.player.Pause(); err != nil {
 		return err
 	}
@@ -457,6 +480,15 @@ func (a *App) Resume() error {
 		return a.playStreamLocked(a.currentID)
 	}
 
+	if runtime.GOOS == "android" {
+		if !a.androidPlayback.running || !a.androidPlayback.paused {
+			return nil
+		}
+		a.androidPlayback.paused = false
+		a.emitPlaybackState()
+		return nil
+	}
+
 	if err := a.player.Resume(); err != nil {
 		return err
 	}
@@ -470,6 +502,7 @@ func (a *App) Stop() error {
 	defer a.playbackMu.Unlock()
 
 	a.stopPlaybackLocked()
+	a.androidPlayback = androidLocalPlayback{}
 	a.currentID = ""
 	a.castPaused = false
 	a.handoffPaused = false
@@ -487,6 +520,16 @@ func (a *App) GetPlaybackState() PlaybackState {
 			Playing:  has && !a.castPaused,
 			Paused:   has && a.castPaused,
 			Loading:  false,
+			StreamID: a.currentID,
+			Volume:   a.cfg.GetVolume(),
+		}
+	}
+	if runtime.GOOS == "android" {
+		ap := a.androidPlayback
+		return PlaybackState{
+			Playing:  ap.running && !ap.paused && !ap.loading,
+			Paused:   ap.running && ap.paused,
+			Loading:  ap.running && !ap.paused && ap.loading,
 			StreamID: a.currentID,
 			Volume:   a.cfg.GetVolume(),
 		}
@@ -513,7 +556,39 @@ func (a *App) outputPlayingLocked() bool {
 	if a.casting {
 		return a.currentID != "" && !a.castPaused
 	}
+	if runtime.GOOS == "android" {
+		return a.androidPlayback.running && !a.androidPlayback.paused
+	}
 	return a.player.IsPlaying()
+}
+
+func (a *App) playStreamAndroidLocked(s config.Stream, id string) error {
+	switching := a.androidPlayback.running && a.currentID != "" && a.currentID != id
+	a.stopMetadataPoller()
+	a.androidPlayback.running = true
+	a.androidPlayback.paused = false
+	if !switching {
+		a.androidPlayback.loading = true
+	}
+	_ = a.cfg.SetLastStreamID(id)
+	a.currentID = id
+	a.castPaused = false
+	a.handoffPaused = false
+	a.startMetadataPoller(s.URL)
+	a.emitPlaybackState()
+	return nil
+}
+
+// markAndroidPlaybackReady clears the loading flag once ExoPlayer is producing audio.
+func (a *App) markAndroidPlaybackReady() {
+	a.playbackMu.Lock()
+	if !a.androidPlayback.running || !a.androidPlayback.loading {
+		a.playbackMu.Unlock()
+		return
+	}
+	a.androidPlayback.loading = false
+	a.playbackMu.Unlock()
+	a.emitPlaybackState()
 }
 
 // SetCasting switches local oto output off while a Cast session is active.
@@ -531,6 +606,7 @@ func (a *App) SetCasting(enabled bool) {
 		a.castPaused = wasPaused && a.currentID != ""
 		a.player.Stop()
 		a.supervisor.Stop()
+		a.androidPlayback = androidLocalPlayback{}
 		if a.currentID != "" && a.metaCancel == nil {
 			if s, ok := a.cfg.GetStreamByID(a.currentID); ok {
 				a.startMetadataPoller(s.URL)
@@ -583,13 +659,13 @@ func (a *App) playbackVolume() int {
 // GetSettings returns app settings.
 func (a *App) GetSettings() SettingsView {
 	return SettingsView{
-		Autoplay:        a.cfg.GetAutoplay(),
-		LaunchOnLogin:   a.cfg.GetLaunchOnLogin(),
-		LaunchMinimized: a.cfg.GetLaunchMinimized(),
+		Autoplay:         a.cfg.GetAutoplay(),
+		LaunchOnLogin:    a.cfg.GetLaunchOnLogin(),
+		LaunchMinimized:  a.cfg.GetLaunchMinimized(),
 		Volume:           a.cfg.GetVolume(),
 		CrossfadeSeconds: a.cfg.GetCrossfadeSeconds(),
 		Desktop:          runtime.GOOS != "android",
-		Version:         appVersion(),
+		Version:          appVersion(),
 	}
 }
 

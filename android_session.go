@@ -120,6 +120,7 @@ type androidSessionPayload struct {
 	Loading      bool   `json:"loading"`
 	StreamID     string `json:"streamId"`
 	StreamURL    string `json:"streamUrl"`
+	CrossfadeMs  int    `json:"crossfadeMs"`
 	Volume       int    `json:"volume"`
 	Title        string `json:"title"`
 	Artist       string `json:"artist"`
@@ -182,6 +183,7 @@ func pushAndroidSession(a *App, state PlaybackState, _ any) {
 		Loading:      state.Loading,
 		StreamID:     state.StreamID,
 		StreamURL:    streamURL,
+		CrossfadeMs:  a.cfg.GetCrossfadeSeconds() * 1000,
 		Volume:       state.Volume,
 		Title:        title,
 		Artist:       artist,
@@ -248,6 +250,12 @@ func Java_uk_co_jdbnet_icetray_NativeBridge_nativePlay(env *C.JNIEnv, clazz C.jc
 		}
 		_ = a.PlayStream(id)
 	})
+}
+
+//export Java_uk_co_jdbnet_icetray_NativeBridge_nativeExoReady
+func Java_uk_co_jdbnet_icetray_NativeBridge_nativeExoReady(env *C.JNIEnv, clazz C.jclass) {
+	rememberJNI(env, clazz)
+	withAndroidApp(func(a *App) { a.markAndroidPlaybackReady() })
 }
 
 //export Java_uk_co_jdbnet_icetray_NativeBridge_nativeSetCasting

@@ -32,6 +32,7 @@ import uk.co.jdbnet.icetray.PlaybackSessionHub
 @UnstableApi
 class PlaybackService : MediaSessionService() {
     private var player: GoBackingPlayer? = null
+    private var exo: ExoPlayback? = null
     private var mediaSession: MediaSession? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var pausedForTransientFocus = false
@@ -55,6 +56,7 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         val backing = GoBackingPlayer(Looper.getMainLooper())
         player = backing
+        exo = ExoPlayback(this)
         mediaSession = MediaSession.Builder(this, backing)
             .setSessionActivity(
                 PendingIntent.getActivity(
@@ -114,6 +116,8 @@ class PlaybackService : MediaSessionService() {
         abandonAudioFocus()
         releaseLocks()
         foregroundStarted = false
+        exo?.releaseAll()
+        exo = null
         mediaSession?.release()
         mediaSession = null
         player = null
@@ -134,6 +138,16 @@ class PlaybackService : MediaSessionService() {
                 artworkPath = payload.optString("artworkPath").takeIf { it.isNotBlank() },
                 streamId = payload.optString("streamId"),
             )
+            if (!payload.optBoolean("casting", false)) {
+                exo?.apply(
+                    playing = playing,
+                    paused = paused,
+                    url = payload.optString("streamUrl"),
+                    crossfadeMs = payload.optInt("crossfadeMs", 2000),
+                )
+            } else {
+                exo?.releaseAll()
+            }
             if (!playing && !paused && !loading) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()

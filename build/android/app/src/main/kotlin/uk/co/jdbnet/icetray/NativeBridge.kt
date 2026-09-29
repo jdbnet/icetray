@@ -26,6 +26,9 @@ object NativeBridge {
     external fun nativeSetCasting(enabled: Boolean)
 
     @JvmStatic
+    external fun nativeExoReady()
+
+    @JvmStatic
     fun onSessionUpdate(json: String) {
         val payload = JSONObject(json)
         Log.i(
