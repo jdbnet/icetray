@@ -10,6 +10,8 @@ import android.webkit.WebView
 import android.widget.Toast
 import androidx.mediarouter.app.MediaRouteChooserDialog
 import androidx.mediarouter.app.MediaRouteControllerDialog
+import androidx.mediarouter.media.MediaRouter
+import androidx.mediarouter.media.MediaRouterParams
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaLoadOptions
 import com.google.android.gms.cast.MediaMetadata
@@ -64,6 +66,7 @@ object CastCoordinator {
 
     fun init(app: Application) {
         appContext = app.applicationContext
+        keepCastRoutesInApp(app)
         CastContext.getSharedInstance(app, initExecutor)
             .addOnSuccessListener { ctx ->
                 mainHandler.post { onCastContextReady(ctx) }
@@ -164,7 +167,17 @@ object CastCoordinator {
         presentCastDialog(activity, castContext, alreadyConnected = true)
     }
 
+    private fun keepCastRoutesInApp(context: Context) {
+        val params = MediaRouterParams.Builder()
+            .setMediaTransferReceiverEnabled(false)
+            .setTransferToLocalEnabled(false)
+            .setOutputSwitcherEnabled(false)
+            .build()
+        MediaRouter.getInstance(context).setRouterParams(params)
+    }
+
     private fun presentCastDialog(activity: Activity, castContext: CastContext, alreadyConnected: Boolean) {
+        keepCastRoutesInApp(activity)
         val session = castContext.sessionManager.currentCastSession
         val selector = castContext.mergedSelector
         if (session != null && session.isConnected) {
