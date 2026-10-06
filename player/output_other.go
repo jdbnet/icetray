@@ -3,6 +3,7 @@
 package player
 
 import (
+	"runtime"
 	"sync"
 	"time"
 
@@ -57,8 +58,24 @@ func (o *outputRelay) set(src beep.Streamer) {
 	o.mu.Unlock()
 }
 
+// outputBufferSamples is the beep speaker buffer, which is split evenly between
+// the driver and the oto player. 100ms is enough where the audio server keeps
+// its own queue and services it from a real-time thread (PulseAudio, CoreAudio, ALSA).
+//
+// WASAPI shared mode does not. Oto's render loop is a normal-priority goroutine,
+// and every half second that goroutine blocks on a COM call to see if the default
+// device changed. With only 50ms in the driver, any scheduling delay drops the
+// device buffer and the stream chops. A few hundred milliseconds of extra latency
+// is inaudible for a live stream and keeps the device fed while the CPU is busy.
+func outputBufferSamples(goos string) int {
+	if goos == "windows" {
+		return speakerSampleRate.N(500 * time.Millisecond)
+	}
+	return speakerSampleRate.N(time.Second / 10)
+}
+
 func initOutput() error {
-	if err := speaker.Init(speakerSampleRate, speakerSampleRate.N(time.Second/10)); err != nil {
+	if err := speaker.Init(speakerSampleRate, outputBufferSamples(runtime.GOOS)); err != nil {
 		return err
 	}
 	speaker.Play(desktopOut)
