@@ -475,7 +475,6 @@ onUnmounted(() => {
         <div class="setting-row">
           <div class="setting-copy">
             <p class="setting-title">Autoplay on startup</p>
-            <p class="setting-desc">Play your last stream automatically when IceTray opens.</p>
           </div>
           <label class="setting-switch">
             <input
@@ -490,9 +489,6 @@ onUnmounted(() => {
         <div v-if="settings.desktop" class="setting-row">
           <div class="setting-copy">
             <p class="setting-title">Launch on login</p>
-            <p class="setting-desc">
-              Start IceTray in the background when you sign in to your computer.
-            </p>
           </div>
           <label class="setting-switch">
             <input
@@ -507,9 +503,6 @@ onUnmounted(() => {
         <div class="setting-row flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="setting-copy">
             <p class="setting-title">Stream crossfade</p>
-            <p class="setting-desc">
-              How long to blend between stations when you switch streams (0–8 seconds).
-            </p>
           </div>
           <div class="flex w-full items-center gap-3 sm:w-52 sm:shrink-0">
             <input
@@ -531,7 +524,6 @@ onUnmounted(() => {
         <div v-if="settings.desktop" class="setting-row">
           <div class="setting-copy">
             <p class="setting-title">Start minimised</p>
-            <p class="setting-desc">Keep the player window hidden on startup. Open it from the system tray when you need it.</p>
           </div>
           <label class="setting-switch">
             <input
@@ -546,9 +538,6 @@ onUnmounted(() => {
         <div class="setting-row flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="setting-copy">
             <p class="setting-title">Backup streams</p>
-            <p class="setting-desc">
-              Export or import your stations and artwork as one .zip file. On Android, export opens the share sheet so you can save the file.
-            </p>
             <p v-if="backupMessage" class="mt-2 text-sm text-emerald-300/90">{{ backupMessage }}</p>
           </div>
           <div class="flex shrink-0 flex-wrap gap-2">
@@ -580,7 +569,6 @@ onUnmounted(() => {
       <div v-else-if="streams.length === 0" class="rounded-2xl border border-dashed border-white/10 p-12 text-center">
         <Music2 :size="48" class="mx-auto text-zinc-600" />
         <p class="mt-4 text-lg text-zinc-300">No streams yet</p>
-        <p class="mt-2 text-sm text-zinc-500">Add your first Icecast stream to get started.</p>
         <button class="icon-btn icon-btn-primary mx-auto mt-6" title="Add stream" aria-label="Add stream" @click="openAdd">
           <Plus :size="iconSize" />
         </button>
@@ -742,12 +730,9 @@ onUnmounted(() => {
     <div v-if="showImportConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @click.self="cancelImport">
       <div class="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
         <h3 class="text-lg font-semibold">Import streams</h3>
-        <p class="mt-2 text-sm text-zinc-400">
-          Choose an IceTray .zip backup. Streams with the same URL are skipped unless you replace everything.
-        </p>
         <label class="mt-4 flex cursor-pointer items-start gap-3 text-sm text-zinc-300">
           <input v-model="importReplace" type="checkbox" class="mt-1" />
-          <span>Replace all existing streams and portable settings (autoplay, volume)</span>
+          <span>Replace existing streams</span>
         </label>
         <div class="mt-6 flex justify-end gap-2">
           <button type="button" class="text-btn" @click="cancelImport">Cancel</button>
@@ -845,13 +830,6 @@ onUnmounted(() => {
   font-size: 0.9375rem;
   font-weight: 500;
   color: rgb(244 244 245);
-}
-
-.setting-desc {
-  margin-top: 0.25rem;
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  color: rgb(113 113 122);
 }
 
 .setting-switch {
