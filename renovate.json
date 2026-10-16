@@ -2,5 +2,13 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "vue-tsc still requires typescript/lib/tsc, which TypeScript 7 no longer exports.",
+      "matchFileNames": ["frontend/package.json", "website/package.json"],
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7.0.0"
+    }
   ]
 }
