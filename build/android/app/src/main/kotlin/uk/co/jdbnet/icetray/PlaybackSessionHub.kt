@@ -29,4 +29,6 @@ internal object PlaybackSessionHub {
     fun bindContext(context: Context) {
         PlaybackService.appContext = context.applicationContext
     }
+
+    fun appContext(): Context? = PlaybackService.appContext
 }

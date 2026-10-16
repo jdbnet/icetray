@@ -362,7 +362,7 @@ async function exportStreams() {
   setBackupMessage('')
   try {
     await ExportStreams()
-    setBackupMessage('Export saved.')
+    setBackupMessage(settings.value.desktop ? 'Export saved.' : 'Choose where to save the backup.')
   } catch (e: unknown) {
     if (isDialogCancelled(e)) return
     setBackupMessage((e as { message?: string })?.message || 'Export failed')
@@ -547,7 +547,7 @@ onUnmounted(() => {
           <div class="setting-copy">
             <p class="setting-title">Backup streams</p>
             <p class="setting-desc">
-              Export or import your stations and artwork as one .zip file. Works across desktop and Android.
+              Export or import your stations and artwork as one .zip file. On Android, export opens the share sheet so you can save the file.
             </p>
             <p v-if="backupMessage" class="mt-2 text-sm text-emerald-300/90">{{ backupMessage }}</p>
           </div>

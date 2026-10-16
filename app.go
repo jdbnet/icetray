@@ -285,6 +285,9 @@ func (a *App) ExportStreams() error {
 	if a.wails == nil {
 		return errInvalidInput("application not ready")
 	}
+	if runtime.GOOS == "android" {
+		return a.exportStreamsAndroid()
+	}
 	path, err := a.wails.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
 		Title:    "Export streams",
 		Filename: "icetray-streams.zip",
@@ -313,6 +316,27 @@ func (a *App) ExportStreams() error {
 		return err
 	}
 	return file.Close()
+}
+
+func (a *App) exportStreamsAndroid() error {
+	dir := filepath.Join(filepath.Dir(a.cfg.ImagesDir()), "exports")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "icetray-streams.zip")
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	writeErr := exportbundle.Write(file, a.cfg.SnapshotForExport(), a.cfg.ImagesDir())
+	closeErr := file.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return shareAndroidFile(path)
 }
 
 // ImportStreams loads streams from an IceTray zip backup.

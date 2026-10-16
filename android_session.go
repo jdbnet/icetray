@@ -12,6 +12,7 @@ package main
 static JavaVM* icetray_jvm = NULL;
 static jclass icetray_bridge_class = NULL;
 static jmethodID icetray_on_session_update = NULL;
+static jmethodID icetray_share_export_file = NULL;
 
 static void icetrayCacheBridge(JNIEnv* env, jclass clazz) {
 	if (env == NULL) return;
@@ -40,6 +41,14 @@ static void icetrayCacheBridge(JNIEnv* env, jclass clazz) {
 			__android_log_print(ANDROID_LOG_ERROR, "IceTray", "onSessionUpdate method not found");
 		} else if (icetray_on_session_update != NULL) {
 			__android_log_print(ANDROID_LOG_INFO, "IceTray", "NativeBridge session JNI cached");
+		}
+	}
+	if (icetray_share_export_file == NULL && icetray_bridge_class != NULL) {
+		icetray_share_export_file = (*env)->GetStaticMethodID(
+			env, icetray_bridge_class, "shareExportFile", "(Ljava/lang/String;)V");
+		if (icetray_share_export_file == NULL && (*env)->ExceptionCheck(env)) {
+			(*env)->ExceptionClear(env);
+			__android_log_print(ANDROID_LOG_ERROR, "IceTray", "shareExportFile method not found");
 		}
 	}
 }
@@ -97,6 +106,30 @@ static void icetrayCallOnSessionUpdate(const char* json) {
 	icetrayReleaseEnv(detach);
 }
 
+static int icetrayShareFile(const char* path) {
+	int detach = 0;
+	JNIEnv* env = icetrayGetEnv(&detach);
+	if (env == NULL || icetray_bridge_class == NULL || icetray_share_export_file == NULL) {
+		icetrayCacheBridge(env, NULL);
+	}
+	if (env == NULL || icetray_bridge_class == NULL || icetray_share_export_file == NULL) {
+		icetrayReleaseEnv(detach);
+		return 1;
+	}
+	jstring jpath = (*env)->NewStringUTF(env, path);
+	(*env)->CallStaticVoidMethod(env, icetray_bridge_class, icetray_share_export_file, jpath);
+	if ((*env)->ExceptionCheck(env)) {
+		(*env)->ExceptionDescribe(env);
+		(*env)->ExceptionClear(env);
+		if (jpath != NULL) (*env)->DeleteLocalRef(env, jpath);
+		icetrayReleaseEnv(detach);
+		return 1;
+	}
+	if (jpath != NULL) (*env)->DeleteLocalRef(env, jpath);
+	icetrayReleaseEnv(detach);
+	return 0;
+}
+
 static char* icetrayJStringToC(JNIEnv* env, jstring value) {
 	if (env == NULL || value == NULL) return NULL;
 	const char* chars = (*env)->GetStringUTFChars(env, value, NULL);
@@ -110,6 +143,7 @@ import "C"
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"unsafe"
 )
@@ -196,6 +230,15 @@ func pushAndroidSession(a *App, state PlaybackState, _ any) {
 	cstr := C.CString(string(data))
 	defer C.free(unsafe.Pointer(cstr))
 	C.icetrayCallOnSessionUpdate(cstr)
+}
+
+func shareAndroidFile(path string) error {
+	cstr := C.CString(path)
+	defer C.free(unsafe.Pointer(cstr))
+	if C.icetrayShareFile(cstr) != 0 {
+		return fmt.Errorf("could not open the Android share sheet")
+	}
+	return nil
 }
 
 func rememberJNI(env *C.JNIEnv, clazz C.jclass) {
