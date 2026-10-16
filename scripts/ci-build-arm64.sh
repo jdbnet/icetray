@@ -33,4 +33,5 @@ bash scripts/ci-deb.sh arm64
 
 echo "==> arm64 build complete:"
 ls -lh "${OUTDIR}/"icetray-linux-arm64 "${OUTDIR}/"icetray-headless-linux-arm64 \
-  "${OUTDIR}/"icetray_"${VERSION}"_arm64.deb
+  "${OUTDIR}/"icetray_"${VERSION}"_arm64.deb \
+  "${OUTDIR}/"icetray-headless_"${VERSION}"_arm64.deb

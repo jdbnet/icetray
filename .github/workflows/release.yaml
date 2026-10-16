@@ -61,6 +61,7 @@ jobs:
             dist/icetray-windows-amd64-setup.exe
             dist/icetray-windows-arm64-setup.exe
             dist/icetray_*_amd64.deb
+            dist/icetray-headless_*_amd64.deb
 
   build-arm64:
     needs: version
@@ -93,6 +94,7 @@ jobs:
             dist/icetray-linux-arm64
             dist/icetray-headless-linux-arm64
             dist/icetray_*_arm64.deb
+            dist/icetray-headless_*_arm64.deb
 
   build-android:
     needs: version
@@ -258,6 +260,8 @@ jobs:
             dist/icetray-android.aab
             dist/icetray_*_amd64.deb
             dist/icetray_*_arm64.deb
+            dist/icetray-headless_*_amd64.deb
+            dist/icetray-headless_*_arm64.deb
             dist/icetray-macos-universal.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -274,7 +278,8 @@ jobs:
           fi
           BASE="${APTUARY_URL%/}"
           QUERY="distribution=${APTUARY_DISTRIBUTION}&component=${APTUARY_COMPONENT}"
-          for deb in dist/icetray_${VERSION}_*.deb; do
+          shopt -s nullglob
+          for deb in dist/icetray_${VERSION}_*.deb dist/icetray-headless_${VERSION}_*.deb; do
             echo "Uploading ${deb}"
             curl -fsSL -X POST \
               -H "Authorization: Bearer ${APTUARY_API_KEY}" \

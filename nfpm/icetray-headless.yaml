@@ -1,0 +1,25 @@
+name: icetray-headless
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${NFPM_VERSION}
+section: sound
+priority: optional
+maintainer: Jamie <jamie@jdbnet.co.uk>
+description: |-
+  Terminal-only IceTray player for servers. Plays an Icecast stream
+  with --stream and does not include the desktop UI.
+vendor: JDB-NET
+homepage: https://github.com/jdbnet/icetray
+license: MIT
+
+depends:
+  - libasound2
+
+contents:
+  - src: dist/nfpm-staging/icetray-headless
+    dst: /usr/local/bin/icetray-headless
+    file_info:
+      mode: 0755
+
+deb:
+  compression: gzip

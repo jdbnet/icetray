@@ -22,23 +22,43 @@ else
   arches=(amd64 arm64)
 fi
 
-packaged=0
-for arch in "${arches[@]}"; do
-  binary="${OUTDIR}/icetray-linux-${arch}"
+package_deb() {
+  local arch="$1"
+  local binary="$2"
+  local staged="$3"
+  local config="$4"
+  local dest="$5"
+
   if [ ! -f "${binary}" ]; then
     echo "Missing ${binary}" >&2
     exit 1
   fi
 
   mkdir -p dist/nfpm-staging
-  cp "${binary}" dist/nfpm-staging/icetray
+  cp "${binary}" "dist/nfpm-staging/${staged}"
 
   NFPM_VERSION="${VERSION}" NFPM_ARCH="${arch}" nfpm package \
-    -f nfpm/icetray.yaml \
-    -t "${OUTDIR}/icetray_${VERSION}_${arch}.deb"
+    -f "${config}" \
+    -t "${dest}"
 
   rm -rf dist/nfpm-staging
-  packaged=$((packaged + 1))
+}
+
+packaged=0
+for arch in "${arches[@]}"; do
+  package_deb "${arch}" \
+    "${OUTDIR}/icetray-linux-${arch}" \
+    icetray \
+    nfpm/icetray.yaml \
+    "${OUTDIR}/icetray_${VERSION}_${arch}.deb"
+
+  package_deb "${arch}" \
+    "${OUTDIR}/icetray-headless-linux-${arch}" \
+    icetray-headless \
+    nfpm/icetray-headless.yaml \
+    "${OUTDIR}/icetray-headless_${VERSION}_${arch}.deb"
+
+  packaged=$((packaged + 2))
 done
 
 if [ "${packaged}" -eq 0 ]; then
@@ -47,4 +67,4 @@ if [ "${packaged}" -eq 0 ]; then
 fi
 
 echo "==> Debian packages:"
-ls -lh "${OUTDIR}"/icetray_"${VERSION}"_*.deb
+ls -lh "${OUTDIR}"/icetray_"${VERSION}"_*.deb "${OUTDIR}"/icetray-headless_"${VERSION}"_*.deb

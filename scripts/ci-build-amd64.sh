@@ -45,4 +45,5 @@ echo "==> amd64 build complete:"
 ls -lh "${OUTDIR}/"icetray-linux-amd64 "${OUTDIR}/"icetray-headless-linux-amd64 \
   "${OUTDIR}/"icetray-windows-amd64.exe "${OUTDIR}/"icetray-windows-arm64.exe \
   "${OUTDIR}/"icetray-windows-amd64-setup.exe "${OUTDIR}/"icetray-windows-arm64-setup.exe \
-  "${OUTDIR}/"icetray_"${VERSION}"_amd64.deb
+  "${OUTDIR}/"icetray_"${VERSION}"_amd64.deb \
+  "${OUTDIR}/"icetray-headless_"${VERSION}"_amd64.deb

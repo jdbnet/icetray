@@ -32,7 +32,7 @@ Get the latest build from [GitHub Releases](https://github.com/jdbnet/icetray/re
 | Windows (installer) | `icetray-windows-amd64-setup.exe`, `icetray-windows-arm64-setup.exe` |
 | macOS | `icetray-macos-universal.zip` (`icetray.app`, universal arm64 + amd64) |
 | Android | `icetray-android.apk` or [Google Play](https://play.google.com/store/apps/details?id=uk.co.jdbnet.icetray) |
-| Debian/Ubuntu | `icetray_*_amd64.deb`, `icetray_*_arm64.deb` |
+| Debian/Ubuntu | `icetray_*_amd64.deb`, `icetray_*_arm64.deb`, `icetray-headless_*_amd64.deb`, `icetray-headless_*_arm64.deb` |
 
 ---
 
@@ -43,6 +43,7 @@ Install from our APT repository...
 ```bash
 curl -fsSL https://apt.jdbnet.co.uk/install/stable.sh | sudo bash
 sudo apt install icetray
+sudo apt install icetray-headless
 ```
 
 Or for other distros...
