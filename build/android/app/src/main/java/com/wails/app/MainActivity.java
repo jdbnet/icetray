@@ -121,7 +121,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        hideStatusBar();
+        showStatusBar();
         applySafeAreaInsets();
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -818,7 +818,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        hideStatusBar();
+        showStatusBar();
         if (bridge != null) {
             bridge.onResume();
         }
@@ -828,13 +828,13 @@ public class MainActivity extends AppCompatActivity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
-            hideStatusBar();
+            showStatusBar();
         }
     }
 
     /**
-     * Edge-to-edge layout with padding only for the nav bar and display cutout.
-     * The status bar stays hidden (see hideStatusBar); do not pad for its inset.
+     * Edge-to-edge layout. Pad for the status bar, nav bar, and display cutout
+     * so content stays clear of the camera bump and the system icons.
      */
     private void applySafeAreaInsets() {
         View root = findViewById(R.id.main_container);
@@ -843,28 +843,28 @@ public class MainActivity extends AppCompatActivity {
             getWindow().setNavigationBarContrastEnforced(false);
         }
         ViewCompat.setOnApplyWindowInsetsListener(root, (view, windowInsets) -> {
+            Insets status = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars());
             Insets nav = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars());
             Insets cutout = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout());
-            int left = Math.max(nav.left, cutout.left);
-            int right = Math.max(nav.right, cutout.right);
-            int top = cutout.top;
-            int bottom = nav.bottom;
+            int left = Math.max(Math.max(status.left, nav.left), cutout.left);
+            int right = Math.max(Math.max(status.right, nav.right), cutout.right);
+            int top = Math.max(status.top, cutout.top);
+            int bottom = Math.max(nav.bottom, cutout.bottom);
             view.setPadding(left, top, right, bottom);
             return WindowInsetsCompat.CONSUMED;
         });
         ViewCompat.requestApplyInsets(root);
     }
 
-    private void hideStatusBar() {
+    private void showStatusBar() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             getWindow().getAttributes().layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
         View decor = getWindow().getDecorView();
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), decor);
-        controller.hide(WindowInsetsCompat.Type.statusBars());
-        controller.setSystemBarsBehavior(
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        controller.show(WindowInsetsCompat.Type.statusBars());
+        controller.setAppearanceLightStatusBars(false);
         View root = findViewById(R.id.main_container);
         if (root != null) {
             ViewCompat.requestApplyInsets(root);
