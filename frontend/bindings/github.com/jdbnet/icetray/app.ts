@@ -138,13 +138,6 @@ export function SetAutoplay(enabled: boolean): $CancellablePromise<void> {
 }
 
 /**
- * SetCasting switches local oto output off while a Cast session is active.
- */
-export function SetCasting(enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(2439065444, enabled);
-}
-
-/**
  * SetCrossfadeSeconds sets stream crossfade duration (0–8 seconds).
  */
 export function SetCrossfadeSeconds(seconds: number): $CancellablePromise<void> {

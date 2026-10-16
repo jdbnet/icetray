@@ -23,9 +23,6 @@ object NativeBridge {
     external fun nativePlay(streamId: String)
 
     @JvmStatic
-    external fun nativeSetCasting(enabled: Boolean)
-
-    @JvmStatic
     external fun nativeExoReady()
 
     @JvmStatic
@@ -33,7 +30,7 @@ object NativeBridge {
         val payload = JSONObject(json)
         Log.i(
             "IceTray",
-            "session update playing=${payload.optBoolean("playing")} paused=${payload.optBoolean("paused")} casting=${payload.optBoolean("casting")} title=${payload.optString("title")}",
+            "session update playing=${payload.optBoolean("playing")} paused=${payload.optBoolean("paused")} title=${payload.optString("title")}",
         )
         PlaybackSessionHub.dispatch(payload)
     }

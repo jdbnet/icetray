@@ -20,7 +20,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
-import androidx.mediarouter.media.MediaRouter
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -42,7 +41,6 @@ class PlaybackService : MediaSessionService() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var noisyRegistered = false
-    private var castReleaseCallback: (() -> Unit)? = null
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -124,28 +122,6 @@ class PlaybackService : MediaSessionService() {
         mediaSession = null
         player = null
         super.onDestroy()
-        val callback = castReleaseCallback
-        castReleaseCallback = null
-        callback?.let { Handler(Looper.getMainLooper()).post(it) }
-    }
-
-    /** Drop the Media3 session before Cast route discovery. Discovery hangs while it is alive. */
-    fun releaseSessionForCast(onReleased: () -> Unit) {
-        castReleaseCallback = onReleased
-        exo?.releaseAll()
-        exo = null
-        mediaSession?.let { session ->
-            removeSession(session)
-            session.release()
-        }
-        mediaSession = null
-        player = null
-        val router = MediaRouter.getInstance(this)
-        if (router.selectedRoute != router.defaultRoute) {
-            router.unselect(MediaRouter.UNSELECT_REASON_STOPPED)
-        }
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
     }
 
     private fun applyPayload(payload: JSONObject) {
@@ -162,17 +138,13 @@ class PlaybackService : MediaSessionService() {
                 artworkPath = payload.optString("artworkPath").takeIf { it.isNotBlank() },
                 streamId = payload.optString("streamId"),
             )
-            if (!payload.optBoolean("casting", false)) {
-                exo?.apply(
-                    playing = playing,
-                    paused = paused,
-                    loading = loading,
-                    url = payload.optString("streamUrl"),
-                    crossfadeMs = payload.optInt("crossfadeMs", 2000),
-                )
-            } else {
-                exo?.releaseAll()
-            }
+            exo?.apply(
+                playing = playing,
+                paused = paused,
+                loading = loading,
+                url = payload.optString("streamUrl"),
+                crossfadeMs = payload.optInt("crossfadeMs", 2000),
+            )
             if (!playing && !paused && !loading) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -338,45 +310,6 @@ class PlaybackService : MediaSessionService() {
 
         fun applyExternalUpdate(payload: JSONObject) {
             instance?.applyPayload(payload)
-        }
-
-        fun dismissForCast() {
-            val svc = instance ?: return
-            val apply = {
-                if (instance === svc) {
-                    svc.stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE)
-                    svc.stopSelf()
-                }
-            }
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                apply()
-            } else {
-                Handler(Looper.getMainLooper()).post(apply)
-            }
-        }
-
-        fun dismissForCastPicker(onReleased: () -> Unit) {
-            val svc = instance
-            if (svc == null) {
-                if (Looper.myLooper() == Looper.getMainLooper()) {
-                    onReleased()
-                } else {
-                    Handler(Looper.getMainLooper()).post(onReleased)
-                }
-                return
-            }
-            val apply = {
-                if (instance === svc) {
-                    svc.releaseSessionForCast(onReleased)
-                } else {
-                    onReleased()
-                }
-            }
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                apply()
-            } else {
-                Handler(Looper.getMainLooper()).post(apply)
-            }
         }
     }
 }

@@ -153,7 +153,6 @@ const headlessSnippet = `./icetray-headless-linux-amd64 --stream https://icecast
               <h3 class="mt-4 font-medium">Android</h3>
               <p class="mt-2 text-sm text-zinc-400">
                 Same stream library on your phone with notification and lock-screen controls.
-                Google Cast support for speakers on your network.
               </p>
             </div>
             <div class="rounded-xl border border-zinc-800 p-6">

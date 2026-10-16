@@ -126,7 +126,6 @@ type androidSessionPayload struct {
 	Artist       string `json:"artist"`
 	ArtworkPath  string `json:"artworkPath"`
 	Notification bool   `json:"notification"`
-	Casting      bool   `json:"casting"`
 }
 
 var (
@@ -188,8 +187,7 @@ func pushAndroidSession(a *App, state PlaybackState, _ any) {
 		Title:        title,
 		Artist:       artist,
 		ArtworkPath:  a.sessionArtworkPath(),
-		Notification: !a.casting && a.currentID != "" && (playing || state.Paused || state.Loading),
-		Casting:      a.casting,
+		Notification: a.currentID != "" && (playing || state.Paused || state.Loading),
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -256,11 +254,4 @@ func Java_uk_co_jdbnet_icetray_NativeBridge_nativePlay(env *C.JNIEnv, clazz C.jc
 func Java_uk_co_jdbnet_icetray_NativeBridge_nativeExoReady(env *C.JNIEnv, clazz C.jclass) {
 	rememberJNI(env, clazz)
 	withAndroidApp(func(a *App) { a.markAndroidPlaybackReady() })
-}
-
-//export Java_uk_co_jdbnet_icetray_NativeBridge_nativeSetCasting
-func Java_uk_co_jdbnet_icetray_NativeBridge_nativeSetCasting(env *C.JNIEnv, clazz C.jclass, enabled C.jboolean) {
-	rememberJNI(env, clazz)
-	on := enabled != 0
-	withAndroidApp(func(a *App) { a.SetCasting(on) })
 }

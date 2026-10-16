@@ -3,7 +3,6 @@ package uk.co.jdbnet.icetray
 import android.content.Context
 import android.content.Intent
 import org.json.JSONObject
-import uk.co.jdbnet.icetray.cast.CastCoordinator
 import uk.co.jdbnet.icetray.playback.PlaybackService
 
 internal object PlaybackSessionHub {
@@ -11,19 +10,8 @@ internal object PlaybackSessionHub {
     var latest: JSONObject? = null
         private set
 
-    @Volatile
-    private var castPickerOpen = false
-
     fun dispatch(payload: JSONObject) {
         latest = payload
-        if (payload.optBoolean("casting", false)) {
-            CastCoordinator.onSessionPayload(payload)
-            PlaybackService.dismissForCast()
-            return
-        }
-        if (castPickerOpen) {
-            return
-        }
         PlaybackService.applyExternalUpdate(payload)
         val notification = payload.optBoolean("notification", false)
         val playing = payload.optBoolean("playing", false)
@@ -40,25 +28,5 @@ internal object PlaybackSessionHub {
 
     fun bindContext(context: Context) {
         PlaybackService.appContext = context.applicationContext
-    }
-
-    /**
-     * Media3 1.11 keeps an active MediaSession while IceTray is playing locally. That session
-     * can prevent Cast route discovery from presenting devices. Drop the foreground session while
-     * the Cast picker is visible; local audio is ExoPlayer inside PlaybackService.
-     */
-    fun releaseLocalMediaSessionForCastPicker(onReleased: () -> Unit = {}) {
-        castPickerOpen = true
-        PlaybackService.dismissForCastPicker(onReleased)
-    }
-
-    /** Restore notification media controls if the user closed the picker without connecting. */
-    fun restoreLocalMediaSessionAfterCastPicker() {
-        castPickerOpen = false
-        val payload = latest ?: return
-        if (payload.optBoolean("casting", false)) {
-            return
-        }
-        dispatch(payload)
     }
 }
