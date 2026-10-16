@@ -41,7 +41,7 @@ import {
   UpdateStream,
 } from '../bindings/github.com/jdbnet/icetray/app'
 import type { NowPlaying, PlaybackState, SettingsView, StreamView, WailsEvent } from './types'
-import { Events } from '@wailsio/runtime'
+import { Browser, Events } from '@wailsio/runtime'
 
 const iconSize = 18
 const iconSizeLg = 22
@@ -73,6 +73,8 @@ const pendingDelete = ref<StreamView | null>(null)
 const showImportConfirm = ref(false)
 const importReplace = ref(true)
 const backupMessage = ref('')
+const updateAvailable = ref('')
+const updateSiteUrl = 'https://icetray.jdbnet.co.uk'
 const BACKUP_MESSAGE_MS = 5000
 let backupMessageTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -169,6 +171,44 @@ async function refreshStreams() {
 
 async function refreshPlayback() {
   playback.value = await GetPlaybackState()
+}
+
+function versionParts(value: string): number[] {
+  return value
+    .trim()
+    .replace(/^v/i, '')
+    .split('.')
+    .map((part) => {
+      const n = Number.parseInt(part, 10)
+      return Number.isFinite(n) ? n : 0
+    })
+}
+
+function isNewerVersion(latest: string, current: string): boolean {
+  const next = versionParts(latest)
+  const now = versionParts(current)
+  const length = Math.max(next.length, now.length)
+  for (let i = 0; i < length; i++) {
+    const a = next[i] ?? 0
+    const b = now[i] ?? 0
+    if (a !== b) return a > b
+  }
+  return false
+}
+
+async function checkForUpdate() {
+  if (!settings.value.desktop) return
+  try {
+    const response = await fetch(`${updateSiteUrl}/version.json`, { cache: 'no-store' })
+    if (!response.ok) return
+    const body = (await response.json()) as { version?: string }
+    const latest = (body.version ?? '').trim()
+    if (latest && isNewerVersion(latest, settings.value.version)) {
+      updateAvailable.value = latest.replace(/^v/i, '')
+    }
+  } catch {
+    updateAvailable.value = ''
+  }
 }
 
 async function refreshSettings() {
@@ -410,6 +450,7 @@ watch(showSettings, (open) => {
 
 onMounted(async () => {
   await loadAll()
+  void checkForUpdate()
   await nextTick()
   gridObserver = new ResizeObserver(() => measureGrid())
   if (gridHost.value) gridObserver.observe(gridHost.value)
@@ -553,7 +594,17 @@ onUnmounted(() => {
         </div>
         <div class="setting-row">
           <p class="setting-title">Version</p>
-          <p class="font-mono text-sm text-zinc-400">{{ settings.version }}</p>
+          <p class="font-mono text-sm text-zinc-400">
+            {{ settings.version }}
+            <button
+              v-if="updateAvailable"
+              type="button"
+              class="ml-2 text-emerald-300 underline-offset-2 hover:underline"
+              @click="Browser.OpenURL(updateSiteUrl)"
+            >
+              {{ updateAvailable }} available
+            </button>
+          </p>
         </div>
       </div>
     </div>
