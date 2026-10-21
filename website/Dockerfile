@@ -1,5 +1,5 @@
 # Build static marketing site
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 ARG VERSION=0.0.0
 WORKDIR /app/website
 COPY website/package.json website/package-lock.json* ./
