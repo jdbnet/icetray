@@ -33,6 +33,8 @@ if [ -z "${VERSION:-}" ] && [ -f "${REPO_ROOT}/VERSION" ]; then
 fi
 echo "==> Android version ${VERSION:-unknown}"
 
+bash scripts/verify-android-target-sdk.sh
+
 echo "==> Installing GTK3 headers for bindings generation..."
 # Bindings typecheck with CGO + gtk3 (webkit2gtk-4.1). The CLI install below
 # still uses CGO_ENABLED=0 because it links operatingsystem without gtk3 tags.

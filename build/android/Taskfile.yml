@@ -6,7 +6,7 @@ includes:
 vars:
   APP_ID: '{{.APP_ID | default "uk.co.jdbnet.icetray"}}'
   MIN_SDK: '26'
-  TARGET_SDK: '36'
+  TARGET_SDK: '37'
   VERSION:
     sh: 'printf %s "${VERSION:-$(tr -d "[:space:]" < VERSION)}"'
   # The emulator runs the host architecture; physical devices are arm64
